@@ -1,0 +1,1 @@
+REVOKE ALL ON FUNCTION public.is_admin() FROM anon;

@@ -1,0 +1,115 @@
+export type AppRole = "super_admin" | "employee";
+
+export type Department = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+export type Profile = {
+  id: string;
+  full_name: string;
+  username: string;
+  email: string;
+  department_id: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  phone: string | null;
+  job_title: string | null;
+  status: string;
+  last_seen_at: string;
+  created_at: string;
+};
+
+export type Project = {
+  id: string;
+  owner_id: string;
+  title: string;
+  project_type: string | null;
+  description: string | null;
+  department_id: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  priority: string;
+  status: string;
+  progress: number;
+  current_task: string | null;
+  completed_tasks: string | null;
+  challenges: string | null;
+  delay_reason: string | null;
+  developer_notes: string | null;
+  github_url: string | null;
+  live_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Task = {
+  id: string;
+  owner_id: string;
+  project_id: string | null;
+  title: string;
+  description: string | null;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  assigned_by: string | null;
+  department_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Report = {
+  id: string;
+  author_id: string;
+  department_id: string | null;
+  report_type: string;
+  title: string;
+  summary: string | null;
+  completed_work: string | null;
+  challenges: string | null;
+  achievements: string | null;
+  next_steps: string | null;
+  report_date: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Attachment = {
+  id: string;
+  owner_id: string;
+  project_id: string | null;
+  report_id: string | null;
+  file_name: string;
+  file_path: string;
+  file_url: string;
+  file_type: string | null;
+  file_size: number | null;
+  kind: string;
+  created_at: string;
+};
+
+export type Activity = {
+  id: string;
+  actor_id: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  description: string;
+  created_at: string;
+};
+
+export type Notification = {
+  id: string;
+  user_id: string | null;
+  actor_id: string | null;
+  title: string;
+  body: string | null;
+  type: string;
+  audience: string;
+  read: boolean;
+  created_at: string;
+};
