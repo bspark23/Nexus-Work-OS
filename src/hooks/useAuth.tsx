@@ -85,6 +85,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile: profile ?? null,
       role: role ?? null,
       isAdmin: role === "super_admin",
+      isDeptAdmin: role === "admin",
+      canManage: role === "super_admin" || role === "admin",
+      departmentId: profile?.department_id ?? null,
+
       loading: !ready || (!!userId && (profileLoading || roleLoading)),
       refreshProfile: () => {
         queryClient.invalidateQueries({ queryKey: ["me", userId] });
