@@ -155,6 +155,9 @@ export async function uploadAttachment(opts: {
   userId: string;
   projectId?: string | null;
   reportId?: string | null;
+  taskId?: string | null;
+  customerJobId?: string | null;
+  departmentId?: string | null;
   kind?: string;
 }) {
   const ext = opts.file.name.split(".").pop() ?? "bin";
@@ -174,6 +177,9 @@ export async function uploadAttachment(opts: {
       owner_id: opts.userId,
       project_id: opts.projectId ?? null,
       report_id: opts.reportId ?? null,
+      task_id: opts.taskId ?? null,
+      customer_job_id: opts.customerJobId ?? null,
+      department_id: opts.departmentId ?? null,
       file_name: opts.file.name,
       file_path: path,
       file_url: signed?.signedUrl ?? "",
@@ -214,6 +220,7 @@ export async function logActivity(input: {
   action: string;
   entity_type: string;
   entity_id?: string | null;
+  department_id?: string | null;
   description: string;
 }) {
   await supabase.from("activities").insert(input as never);
@@ -257,6 +264,7 @@ export async function track(opts: {
   entityType: string;
   entityId?: string | null;
   detail: string;
+  departmentId?: string | null;
   notify?: boolean;
   type?: string;
 }) {
@@ -265,6 +273,7 @@ export async function track(opts: {
     action: opts.action,
     entity_type: opts.entityType,
     entity_id: opts.entityId ?? null,
+    department_id: opts.departmentId ?? null,
     description: opts.detail,
   });
   if (opts.notify !== false) {
