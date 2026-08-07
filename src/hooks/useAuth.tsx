@@ -1,12 +1,21 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
+import { auth, db } from "@/integrations/firebase/config";
 import type { AppRole, Profile } from "@/lib/types";
 
 type AuthCtx = {
-  session: Session | null;
-  user: User | null;
+  user: (User & { id: string }) | null;
   profile: Profile | null;
   role: AppRole | null;
   /** Super Admin — unrestricted, company-wide access. */
@@ -21,7 +30,6 @@ type AuthCtx = {
 };
 
 const Ctx = createContext<AuthCtx>({
-  session: null,
   user: null,
   profile: null,
   role: null,
@@ -33,69 +41,79 @@ const Ctx = createContext<AuthCtx>({
   refreshProfile: () => {},
 });
 
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [ready, setReady] = useState(false);
-  const queryClient = useQueryClient();
+  const [user, setUser] = useState<(User & { id: string }) | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
+  // Listen to Firebase Auth state changes
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      setReady(true);
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        queryClient.invalidateQueries();
+    const unsub = onAuthStateChanged(auth, (u) => {
+      // Add `id` as an alias for `uid` for backward compatibility
+      setUser(u ? Object.assign(u, { id: u.uid }) : null);
+      setAuthReady(true);
+      if (!u) {
+        setProfile(null);
+        setRole(null);
+        setProfileReady(true);
       }
     });
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [queryClient]);
+    return unsub;
+  }, []);
 
-  const userId = session?.user.id ?? null;
+  // Listen to Firestore profile + role in real time
+  useEffect(() => {
+    if (!user) return;
+    setProfileReady(false);
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ["me", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("*").eq("id", userId!).maybeSingle();
-      return (data as unknown as Profile) ?? null;
-    },
-  });
+    // Profile listener
+    const unsubProfile = onSnapshot(
+      doc(db, "profiles", user.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setProfile({ id: snap.id, ...snap.data() } as Profile);
+        } else {
+          setProfile(null);
+        }
+        setProfileReady(true);
+      },
+      () => setProfileReady(true),
+    );
 
-  const { data: role, isLoading: roleLoading } = useQuery({
-    queryKey: ["my-role", userId],
-    enabled: !!userId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId!)
-        .maybeSingle();
-      return ((data as unknown as { role: AppRole } | null)?.role ?? null) as AppRole | null;
-    },
-  });
+    // Role listener
+    const unsubRole = onSnapshot(
+      doc(db, "user_roles", user.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setRole((snap.data()?.["role"] as AppRole) ?? null);
+        } else {
+          setRole(null);
+        }
+      },
+    );
+
+    return () => {
+      unsubProfile();
+      unsubRole();
+    };
+  }, [user, refreshKey]);
 
   const value = useMemo<AuthCtx>(
     () => ({
-      session,
-      user: session?.user ?? null,
-      profile: profile ?? null,
-      role: role ?? null,
+      user,
+      profile,
+      role,
       isAdmin: role === "super_admin",
       isDeptAdmin: role === "admin",
       canManage: role === "super_admin" || role === "admin",
       departmentId: profile?.department_id ?? null,
-
-      loading: !ready || (!!userId && (profileLoading || roleLoading)),
-      refreshProfile: () => {
-        queryClient.invalidateQueries({ queryKey: ["me", userId] });
-        queryClient.invalidateQueries({ queryKey: ["my-role", userId] });
-      },
+      loading: !authReady || (!!user && !profileReady),
+      refreshProfile: () => setRefreshKey((k) => k + 1),
     }),
-    [session, profile, role, ready, userId, profileLoading, roleLoading, queryClient],
+    [user, profile, role, authReady, profileReady],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

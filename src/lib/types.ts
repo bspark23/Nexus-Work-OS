@@ -47,13 +47,14 @@ export type Project = {
 
 export type Task = {
   id: string;
-  owner_id: string;
+  owner_id: string;           // person the task is assigned TO
+  assigned_to: string | null; // explicit assignee (same as owner_id)
   project_id: string | null;
   customer_job_id: string | null;
   title: string;
   description: string | null;
   priority: string;
-  status: string;
+  status: string;             // pending | in_progress | blocked | done | expired
   progress: number;
   start_date: string | null;
   due_date: string | null;
@@ -62,6 +63,12 @@ export type Task = {
   assigned_by: string | null;
   department_id: string | null;
   notes: string | null;
+  // Fields filled by the assignee when submitting completion / update
+  completion_note: string | null;   // "I have finished…"
+  completion_link: string | null;   // optional URL to deliverable
+  block_reason: string | null;      // required when status = blocked
+  review_status: string | null;     // null | "pending_review" | "approved" | "rejected"
+  reviewer_feedback: string | null; // feedback from the assigner
   created_at: string;
   updated_at: string;
 };

@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { collection, onSnapshot } from "firebase/firestore";
+import { db } from "@/integrations/firebase/config";
 
-const TABLES = [
+const COLLECTIONS = [
   "projects",
   "tasks",
   "reports",
@@ -14,24 +15,28 @@ const TABLES = [
   "user_roles",
   "customer_jobs",
   "customer_job_departments",
-];
+] as const;
 
-/** Keeps every dashboard in sync with the shared company database in real time. */
+/** Keeps every dashboard in sync with Firestore in real time. */
 export function useLiveData(enabled: boolean) {
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!enabled) return;
-    const channel = supabase.channel("nexus-live");
-    TABLES.forEach((table) => {
-      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => {
-        queryClient.invalidateQueries({ queryKey: [table] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      });
-    });
-    channel.subscribe();
+
+    const unsubscribers = COLLECTIONS.map((col) =>
+      onSnapshot(
+        collection(db, col),
+        { includeMetadataChanges: false },
+        () => {
+          queryClient.invalidateQueries({ queryKey: [col] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+        },
+      ),
+    );
+
     return () => {
-      supabase.removeChannel(channel);
+      unsubscribers.forEach((unsub) => unsub());
     };
   }, [enabled, queryClient]);
 }

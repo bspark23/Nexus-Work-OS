@@ -10,7 +10,7 @@ import {
   fetchRoles,
   fetchTasks,
 } from "@/lib/api";
-import { fetchCustomerJobs, fetchJobDepartments } from "@/lib/jobs-api";
+import { fetchCustomerJobs, fetchJobDepartments, fetchSavedFile } from "@/lib/jobs-api";
 import { useAuth } from "./useAuth";
 import { SALES_DEPARTMENT } from "@/lib/constants";
 
@@ -49,6 +49,13 @@ export const useJobDepartments = (enabled = true) =>
     queryKey: ["customer_job_departments"],
     queryFn: fetchJobDepartments,
     enabled,
+  });
+
+export const useSavedFile = (userId: string | null) =>
+  useQuery({
+    queryKey: ["saved_file", userId],
+    queryFn: () => fetchSavedFile(userId!),
+    enabled: !!userId,
   });
 
 /** Name of the department the signed-in user belongs to. */

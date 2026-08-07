@@ -1,10 +1,11 @@
-import { supabase } from "@/integrations/supabase/client";
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { db } from "@/integrations/firebase/config";
 
 type Base = { title: string; body?: string | null; type?: string; actorId?: string | null };
 
 async function insert(rows: Record<string, unknown>[]) {
   if (!rows.length) return;
-  await supabase.from("notifications").insert(rows as never);
+  await Promise.all(rows.map((row) => addDoc(collection(db, "notifications"), { ...row, read: false, created_at: serverTimestamp() })));
 }
 
 /** Notification aimed at one person. */
@@ -17,6 +18,7 @@ export function notifyUser(userId: string, n: Base) {
       body: n.body ?? null,
       type: n.type ?? "info",
       audience: "personal",
+      department_id: null,
     },
   ]);
 }

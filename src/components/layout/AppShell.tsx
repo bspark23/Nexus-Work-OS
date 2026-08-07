@@ -21,13 +21,15 @@ import {
   Sparkles,
   AlarmClock,
   Briefcase,
+  FileSpreadsheet,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { supabase } from "@/integrations/supabase/client";
+import { signOut } from "firebase/auth";
+import { auth } from "@/integrations/firebase/config";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useLiveData } from "@/hooks/useLiveData";
@@ -60,6 +62,7 @@ function workspaceNav(opts: {
   }
   if (opts.isSales || opts.isAdmin || opts.isDeptAdmin) {
     items.push({ to: "/customer-jobs", label: "Customer Jobs", icon: Briefcase });
+    items.push({ to: "/file-workspace", label: "File Workspace", icon: FileSpreadsheet });
   }
   items.push({ to: "/activity", label: opts.isAdmin || opts.isDeptAdmin ? "Activity" : "My Activity", icon: ActivityIcon });
   return items;
@@ -159,10 +162,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   useLiveData(!!user);
 
-  async function signOut() {
+  async function handleSignOut() {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase.auth.signOut();
+    await signOut(auth);
     navigate({ to: "/auth", replace: true });
   }
 
@@ -193,7 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="icon"
             className="text-sidebar-foreground/70 hover:text-destructive size-8"
-            onClick={signOut}
+            onClick={handleSignOut}
             aria-label="Log out"
           >
             <LogOut className="size-4" />

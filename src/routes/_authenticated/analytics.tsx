@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
 import { Progress } from "@/components/ui/progress";
 import { useDepartments, useProjects, useReports, useTasks } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
 import { BarChart3, CheckCircle2, ListChecks, TriangleAlert } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/analytics")({
@@ -18,10 +19,19 @@ export const Route = createFileRoute("/_authenticated/analytics")({
 });
 
 function AnalyticsPage() {
-  const { data: projects = [] } = useProjects();
-  const { data: tasks = [] } = useTasks();
-  const { data: reports = [] } = useReports();
+  const { isAdmin } = useAuth();
+  const { data: projects = [] } = useProjects(isAdmin);
+  const { data: tasks = [] } = useTasks(isAdmin);
+  const { data: reports = [] } = useReports(isAdmin);
   const { data: departments = [] } = useDepartments();
+
+  if (!isAdmin) {
+    return (
+      <div className="text-muted-foreground flex h-60 items-center justify-center text-sm">
+        Super Admin access required.
+      </div>
+    );
+  }
 
   const completed = projects.filter((p) => p.status === "completed").length;
   const blocked = projects.filter((p) => p.status === "blocked").length;

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireFirebaseAuth } from "@/integrations/firebase/auth-middleware";
 
 const roleSchema = z.enum(["super_admin", "admin", "employee"]);
 
@@ -11,7 +11,7 @@ export const ensureSuperAdmin = createServerFn({ method: "POST" }).handler(async
 });
 
 export const adminCreateUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireFirebaseAuth])
   .inputValidator((data: unknown) =>
     z
       .object({
@@ -19,7 +19,7 @@ export const adminCreateUser = createServerFn({ method: "POST" })
         username: z.string().min(2),
         email: z.string().email().or(z.literal("")),
         password: z.string().min(8),
-        departmentId: z.string().uuid().nullable(),
+        departmentId: z.string().nullable(),
         jobTitle: z.string().nullable().optional(),
         role: roleSchema,
       })
@@ -28,13 +28,21 @@ export const adminCreateUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { assertSuperAdmin, createManagedUser } = await import("./admin.server");
     await assertSuperAdmin(context.userId);
-    return createManagedUser(data);
+    return createManagedUser({
+      fullName: data.fullName,
+      username: data.username,
+      email: data.email,
+      password: data.password,
+      departmentId: data.departmentId,
+      jobTitle: data.jobTitle ?? null,
+      role: data.role,
+    });
   });
 
 export const adminSetRole = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireFirebaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({ userId: z.string().uuid(), role: roleSchema }).parse(data),
+    z.object({ userId: z.string(), role: roleSchema }).parse(data),
   )
   .handler(async ({ data, context }) => {
     const { assertSuperAdmin, setUserRole } = await import("./admin.server");
@@ -44,10 +52,10 @@ export const adminSetRole = createServerFn({ method: "POST" })
   });
 
 export const adminSetStatus = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireFirebaseAuth])
   .inputValidator((data: unknown) =>
     z
-      .object({ userId: z.string().uuid(), status: z.enum(["active", "suspended"]) })
+      .object({ userId: z.string(), status: z.enum(["active", "suspended"]) })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
@@ -58,14 +66,14 @@ export const adminSetStatus = createServerFn({ method: "POST" })
   });
 
 export const adminUpdateUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([requireFirebaseAuth])
   .inputValidator((data: unknown) =>
     z
       .object({
-        userId: z.string().uuid(),
+        userId: z.string(),
         fullName: z.string().min(2),
         email: z.string().email().or(z.literal("")),
-        departmentId: z.string().uuid().nullable(),
+        departmentId: z.string().nullable(),
         jobTitle: z.string().nullable().optional(),
       })
       .parse(data),
@@ -75,7 +83,7 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
     await assertSuperAdmin(context.userId);
     await updateManagedProfile(data.userId, {
       full_name: data.fullName,
-      email: data.email || undefined,
+      ...(data.email ? { email: data.email } : {}),
       department_id: data.departmentId,
       job_title: data.jobTitle ?? null,
     });
@@ -83,8 +91,8 @@ export const adminUpdateUser = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteUser = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ userId: z.string().uuid() }).parse(data))
+  .middleware([requireFirebaseAuth])
+  .inputValidator((data: unknown) => z.object({ userId: z.string() }).parse(data))
   .handler(async ({ data, context }) => {
     const { assertSuperAdmin, removeUser } = await import("./admin.server");
     await assertSuperAdmin(context.userId);

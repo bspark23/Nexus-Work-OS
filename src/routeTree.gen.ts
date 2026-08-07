@@ -16,9 +16,12 @@ import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedCompanyReportsRouteImport } from './routes/_authenticated/company-reports'
+import { Route as AuthenticatedCustomerJobsRouteImport } from './routes/_authenticated/customer-jobs'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
 import { Route as AuthenticatedEmployeesRouteImport } from './routes/_authenticated/employees'
+import { Route as AuthenticatedFileWorkspaceRouteImport } from './routes/_authenticated/file-workspace'
+import { Route as AuthenticatedOverdueRouteImport } from './routes/_authenticated/overdue'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
@@ -61,6 +64,12 @@ const AuthenticatedCompanyReportsRoute =
     path: '/company-reports',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCustomerJobsRoute =
+  AuthenticatedCustomerJobsRouteImport.update({
+    id: '/customer-jobs',
+    path: '/customer-jobs',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -75,6 +84,17 @@ const AuthenticatedDepartmentsRoute =
 const AuthenticatedEmployeesRoute = AuthenticatedEmployeesRouteImport.update({
   id: '/employees',
   path: '/employees',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFileWorkspaceRoute =
+  AuthenticatedFileWorkspaceRouteImport.update({
+    id: '/file-workspace',
+    path: '/file-workspace',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedOverdueRoute = AuthenticatedOverdueRouteImport.update({
+  id: '/overdue',
+  path: '/overdue',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedProfileRoute = AuthenticatedProfileRouteImport.update({
@@ -115,9 +135,12 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employees': typeof AuthenticatedEmployeesRoute
+  '/file-workspace': typeof AuthenticatedFileWorkspaceRoute
+  '/overdue': typeof AuthenticatedOverdueRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -132,9 +155,12 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
   '/employees': typeof AuthenticatedEmployeesRoute
+  '/file-workspace': typeof AuthenticatedFileWorkspaceRoute
+  '/overdue': typeof AuthenticatedOverdueRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/reports': typeof AuthenticatedReportsRoute
@@ -151,9 +177,12 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/_authenticated/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
   '/_authenticated/employees': typeof AuthenticatedEmployeesRoute
+  '/_authenticated/file-workspace': typeof AuthenticatedFileWorkspaceRoute
+  '/_authenticated/overdue': typeof AuthenticatedOverdueRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
@@ -170,9 +199,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/company-reports'
+    | '/customer-jobs'
     | '/dashboard'
     | '/departments'
     | '/employees'
+    | '/file-workspace'
+    | '/overdue'
     | '/profile'
     | '/projects'
     | '/reports'
@@ -187,9 +219,12 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/company-reports'
+    | '/customer-jobs'
     | '/dashboard'
     | '/departments'
     | '/employees'
+    | '/file-workspace'
+    | '/overdue'
     | '/profile'
     | '/projects'
     | '/reports'
@@ -205,9 +240,12 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/analytics'
     | '/_authenticated/company-reports'
+    | '/_authenticated/customer-jobs'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
     | '/_authenticated/employees'
+    | '/_authenticated/file-workspace'
+    | '/_authenticated/overdue'
     | '/_authenticated/profile'
     | '/_authenticated/projects'
     | '/_authenticated/reports'
@@ -274,6 +312,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCompanyReportsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/customer-jobs': {
+      id: '/_authenticated/customer-jobs'
+      path: '/customer-jobs'
+      fullPath: '/customer-jobs'
+      preLoaderRoute: typeof AuthenticatedCustomerJobsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -293,6 +338,20 @@ declare module '@tanstack/react-router' {
       path: '/employees'
       fullPath: '/employees'
       preLoaderRoute: typeof AuthenticatedEmployeesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/file-workspace': {
+      id: '/_authenticated/file-workspace'
+      path: '/file-workspace'
+      fullPath: '/file-workspace'
+      preLoaderRoute: typeof AuthenticatedFileWorkspaceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/overdue': {
+      id: '/_authenticated/overdue'
+      path: '/overdue'
+      fullPath: '/overdue'
+      preLoaderRoute: typeof AuthenticatedOverdueRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/profile': {
@@ -345,9 +404,12 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCompanyReportsRoute: typeof AuthenticatedCompanyReportsRoute
+  AuthenticatedCustomerJobsRoute: typeof AuthenticatedCustomerJobsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
   AuthenticatedEmployeesRoute: typeof AuthenticatedEmployeesRoute
+  AuthenticatedFileWorkspaceRoute: typeof AuthenticatedFileWorkspaceRoute
+  AuthenticatedOverdueRoute: typeof AuthenticatedOverdueRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
@@ -360,9 +422,12 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCompanyReportsRoute: AuthenticatedCompanyReportsRoute,
+  AuthenticatedCustomerJobsRoute: AuthenticatedCustomerJobsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
   AuthenticatedEmployeesRoute: AuthenticatedEmployeesRoute,
+  AuthenticatedFileWorkspaceRoute: AuthenticatedFileWorkspaceRoute,
+  AuthenticatedOverdueRoute: AuthenticatedOverdueRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
@@ -382,3 +447,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

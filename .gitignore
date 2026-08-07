@@ -16,6 +16,11 @@ dist-ssr
 .nitro
 *.local
 
+# Environment variables — NEVER commit secrets
+.env
+.env.*
+!.env.example
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars
@@ -30,3 +35,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Lovable (platform-specific)
+.lovable/
+bunfig.toml

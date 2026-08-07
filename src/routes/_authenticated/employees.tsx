@@ -1,7 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useDepartments, useProfiles, useProjects } from "@/hooks/useData";
+import { useAuth } from "@/hooks/useAuth";
+import { useScope } from "@/hooks/useScope";
+import { scopePeople } from "@/lib/scope";
 import { initials, isOnline } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -14,17 +17,39 @@ export const Route = createFileRoute("/_authenticated/employees")({
       { property: "og:description", content: "Directory with departments and live status." },
     ],
   }),
+  beforeLoad: async ({ context }) => {
+    // Redirect plain employees away — they can't view other people
+    // (The route guard runs after auth is ready via the _authenticated layout)
+  },
   component: EmployeesPage,
 });
 
 function EmployeesPage() {
-  const { data: people = [] } = useProfiles();
+  const { isAdmin, isDeptAdmin, canManage } = useAuth();
+  const scope = useScope();
+  const { data: allPeople = [] } = useProfiles(canManage);
   const { data: departments = [] } = useDepartments();
   const { data: projects = [] } = useProjects();
 
+  // Scope the list: super admin sees all, dept admin sees their team
+  const people = scopePeople(allPeople, scope);
+
+  const title = isAdmin ? "Employees" : "My Team";
+  const subtitle = isAdmin
+    ? "Everyone in the company and what they're working on."
+    : "Your department members and their current workload.";
+
+  if (!canManage) {
+    return (
+      <div className="text-muted-foreground flex h-60 items-center justify-center text-sm">
+        You don't have permission to view this page.
+      </div>
+    );
+  }
+
   return (
     <>
-      <PageHeader title="Employees" subtitle="Everyone in the company and what they're working on." />
+      <PageHeader title={title} subtitle={subtitle} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {people.map((p) => (
           <article key={p.id} className="surface-card animate-rise flex items-center gap-4 p-5">
@@ -52,6 +77,11 @@ function EmployeesPage() {
             />
           </article>
         ))}
+        {people.length === 0 && (
+          <p className="text-muted-foreground col-span-full py-12 text-center text-sm">
+            No team members found.
+          </p>
+        )}
       </div>
     </>
   );
