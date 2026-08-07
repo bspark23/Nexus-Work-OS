@@ -22,21 +22,11 @@ async function findUserByEmail(email: string) {
 
 /** Idempotently guarantees the pre-configured Super Admin account exists. */
 export async function ensureSeedSuperAdmin() {
-  const { data: existing } = await supabaseAdmin
-    .from("user_roles")
-    .select("user_id")
-    .eq("role", "super_admin")
-    .limit(1);
-  if (existing && existing.length > 0) return { created: false as const };
-
   let userId: string;
+  let created = false;
   const found = await findUserByEmail(SUPER_ADMIN_SEED.email);
   if (found) {
     userId = found.id;
-    await supabaseAdmin.auth.admin.updateUserById(userId, {
-      password: SUPER_ADMIN_SEED.password,
-      email_confirm: true,
-    });
   } else {
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email: SUPER_ADMIN_SEED.email,
@@ -45,7 +35,9 @@ export async function ensureSeedSuperAdmin() {
     });
     if (error || !data.user) throw new Error(error?.message ?? "Could not create Super Admin");
     userId = data.user.id;
+    created = true;
   }
+
 
   await supabaseAdmin.from("profiles").upsert(
     {
