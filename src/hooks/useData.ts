@@ -10,6 +10,9 @@ import {
   fetchRoles,
   fetchTasks,
 } from "@/lib/api";
+import { fetchCustomerJobs, fetchJobDepartments } from "@/lib/jobs-api";
+import { useAuth } from "./useAuth";
+import { SALES_DEPARTMENT } from "@/lib/constants";
 
 export const useDepartments = () =>
   useQuery({ queryKey: ["departments"], queryFn: fetchDepartments });
@@ -37,3 +40,21 @@ export const useNotifications = (enabled = true) =>
 
 export const useAttachments = (enabled = true) =>
   useQuery({ queryKey: ["attachments"], queryFn: fetchAttachments, enabled });
+
+export const useCustomerJobs = (enabled = true) =>
+  useQuery({ queryKey: ["customer_jobs"], queryFn: fetchCustomerJobs, enabled });
+
+export const useJobDepartments = (enabled = true) =>
+  useQuery({
+    queryKey: ["customer_job_departments"],
+    queryFn: fetchJobDepartments,
+    enabled,
+  });
+
+/** Name of the department the signed-in user belongs to. */
+export function useMyDepartment() {
+  const { departmentId } = useAuth();
+  const { data: departments = [] } = useDepartments();
+  const department = departments.find((d) => d.id === departmentId) ?? null;
+  return { department, departmentId, isSales: department?.name === SALES_DEPARTMENT };
+}

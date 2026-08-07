@@ -10,6 +10,10 @@ const TABLES = [
   "notifications",
   "departments",
   "profiles",
+  "attachments",
+  "user_roles",
+  "customer_jobs",
+  "customer_job_departments",
 ];
 
 /** Keeps every dashboard in sync with the shared company database in real time. */

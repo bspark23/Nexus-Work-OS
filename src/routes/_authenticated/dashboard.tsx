@@ -1,10 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   Activity as ActivityIcon,
+  AlarmClock,
+  Briefcase,
+  Building2,
   CheckCircle2,
-  Clock,
+  FileText,
   FolderKanban,
   ListChecks,
+  Paperclip,
   TriangleAlert,
   Users,
 } from "lucide-react";
@@ -15,9 +19,29 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useActivities, useProfiles, useProjects, useReports, useTasks } from "@/hooks/useData";
+import { useScope } from "@/hooks/useScope";
+import {
+  useActivities,
+  useAttachments,
+  useCustomerJobs,
+  useDepartments,
+  useMyDepartment,
+  useProfiles,
+  useProjects,
+  useReports,
+  useTasks,
+} from "@/hooks/useData";
 import { PROJECT_STATUSES, TASK_STATUSES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate, relativeTime } from "@/lib/format";
+import {
+  isOverdue,
+  scopeActivities,
+  scopePeople,
+  scopeProjects,
+  scopeReports,
+  scopeTasks,
+} from "@/lib/scope";
+import type { Task } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -31,40 +55,112 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
+function Panel({
+  title,
+  href,
+  icon,
+  children,
+  className,
+}: {
+  title: string;
+  href?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`surface-card animate-rise ${className ?? ""}`}>
+      <header className="flex items-center justify-between border-b px-5 py-4">
+        <h2 className="flex items-center gap-2 font-semibold">
+          {icon}
+          {title}
+        </h2>
+        {href ? (
+          <Link to={href} className="text-primary text-xs font-medium hover:underline">
+            View all
+          </Link>
+        ) : null}
+      </header>
+      {children}
+    </section>
+  );
+}
+
+function Nothing({ text }: { text: string }) {
+  return <p className="text-muted-foreground px-5 py-10 text-center text-xs">{text}</p>;
+}
+
+function TaskRow({ t }: { t: Task }) {
+  return (
+    <li className="hover:bg-secondary/40 transition-smooth flex flex-wrap items-center gap-3 px-5 py-3">
+      {t.status === "blocked" ? (
+        <TriangleAlert className="text-destructive size-4 shrink-0" />
+      ) : isOverdue(t) ? (
+        <AlarmClock className="text-warning size-4 shrink-0" />
+      ) : (
+        <ListChecks className="text-muted-foreground size-4 shrink-0" />
+      )}
+      <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
+      <span className="text-muted-foreground text-xs">{formatDate(t.due_date)}</span>
+      <StatusBadge label={labelOf(TASK_STATUSES, t.status)} tone={toneOf(TASK_STATUSES, t.status)} />
+    </li>
+  );
+}
+
 function Dashboard() {
-  const { profile, isAdmin, user } = useAuth();
-  const { data: projects = [] } = useProjects();
-  const { data: tasks = [] } = useTasks();
-  const { data: reports = [] } = useReports();
-  const { data: people = [] } = useProfiles();
-  const { data: activities = [] } = useActivities();
+  const { profile, isAdmin, isDeptAdmin } = useAuth();
+  const scope = useScope();
+  const { department, isSales } = useMyDepartment();
 
-  const myProjects = isAdmin ? projects : projects.filter((p) => p.owner_id === user?.id);
-  const myTasks = isAdmin ? tasks : tasks.filter((t) => t.owner_id === user?.id);
-  const myReports = isAdmin ? reports : reports.filter((r) => r.author_id === user?.id);
+  const { data: allProjects = [] } = useProjects();
+  const { data: allTasks = [] } = useTasks();
+  const { data: allReports = [] } = useReports();
+  const { data: allPeople = [] } = useProfiles();
+  const { data: allActivities = [] } = useActivities();
+  const { data: departments = [] } = useDepartments();
+  const { data: jobs = [] } = useCustomerJobs(isSales || isAdmin || isDeptAdmin);
+  const { data: files = [] } = useAttachments();
 
-  const active = myProjects.filter((p) => p.status === "in_progress").length;
-  const completed = myProjects.filter((p) => p.status === "completed").length;
-  const blocked = myProjects.filter((p) => p.status === "blocked").length;
-  const openTasks = myTasks.filter((t) => t.status !== "done").length;
-  const avgProgress = myProjects.length
-    ? Math.round(myProjects.reduce((s, p) => s + (p.progress ?? 0), 0) / myProjects.length)
+  const projects = scopeProjects(allProjects, scope);
+  const tasks = scopeTasks(allTasks, scope);
+  const reports = scopeReports(allReports, scope);
+  const people = scopePeople(allPeople, scope);
+  const activities = scopeActivities(allActivities, scope);
+
+  const openTasks = tasks.filter((t) => t.status !== "done" && t.status !== "expired");
+  const overdue = tasks.filter(isOverdue);
+  const doneTasks = tasks.filter((t) => t.status === "done");
+  const blockedTasks = tasks.filter((t) => t.status === "blocked");
+  const completedProjects = projects.filter((p) => p.status === "completed").length;
+  const activeProjects = projects.filter((p) => p.status === "in_progress").length;
+  const avgProgress = projects.length
+    ? Math.round(projects.reduce((s, p) => s + (p.progress ?? 0), 0) / projects.length)
     : 0;
+
+  const title = isAdmin
+    ? "Company overview"
+    : isDeptAdmin
+      ? `${department?.name ?? "Department"} overview`
+      : `Welcome back, ${profile?.full_name?.split(" ")[0] ?? "there"}`;
+
+  const subtitle = isAdmin
+    ? "Everything happening across every department, live."
+    : isDeptAdmin
+      ? "Your department's people, work and progress in real time."
+      : "Your personal workspace — only your work lives here.";
 
   return (
     <>
       <PageHeader
-        title={`Welcome back, ${profile?.full_name?.split(" ")[0] ?? "there"}`}
-        subtitle={
-          isAdmin
-            ? "Company-wide overview of every team's work in real time."
-            : "Here's where your work stands today."
-        }
+        title={title}
+        subtitle={subtitle}
         actions={
           <>
-            <Link to="/projects">
-              <Button variant="outline">New project</Button>
-            </Link>
+            {isAdmin || isDeptAdmin ? (
+              <Link to="/tasks">
+                <Button variant="outline">Assign task</Button>
+              </Link>
+            ) : null}
             <Link to="/reports">
               <Button>Submit report</Button>
             </Link>
@@ -74,48 +170,64 @@ function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label={isAdmin ? "Active projects" : "My active projects"}
-          value={active}
+          label={isAdmin ? "Active projects" : isDeptAdmin ? "Department projects" : "My projects"}
+          value={activeProjects}
           icon={<FolderKanban className="size-5" />}
-          hint={`${myProjects.length} total`}
+          hint={`${projects.length} total · ${avgProgress}% avg progress`}
         />
         <StatCard
           label="Open tasks"
-          value={openTasks}
+          value={openTasks.length}
           tone="info"
           icon={<ListChecks className="size-5" />}
-          hint={`${myTasks.length} total tasks`}
+          hint={`${doneTasks.length} completed`}
         />
         <StatCard
-          label="Completed"
-          value={completed}
-          tone="success"
-          icon={<CheckCircle2 className="size-5" />}
-          hint={`${avgProgress}% average progress`}
+          label="Overdue"
+          value={overdue.length}
+          tone={overdue.length ? "warning" : "success"}
+          icon={<AlarmClock className="size-5" />}
+          hint={blockedTasks.length ? `${blockedTasks.length} blocked` : "Nothing past deadline"}
         />
-        <StatCard
-          label={isAdmin ? "Employees" : "Reports filed"}
-          value={isAdmin ? people.length : myReports.length}
-          tone={blocked ? "warning" : "primary"}
-          icon={isAdmin ? <Users className="size-5" /> : <Clock className="size-5" />}
-          hint={blocked ? `${blocked} blocked project(s)` : "All clear"}
-        />
+        {isAdmin ? (
+          <StatCard
+            label="Employees"
+            value={people.length}
+            tone="success"
+            icon={<Users className="size-5" />}
+            hint={`${departments.length} departments`}
+          />
+        ) : isDeptAdmin ? (
+          <StatCard
+            label="Team members"
+            value={people.length}
+            tone="success"
+            icon={<Users className="size-5" />}
+            hint={`${reports.length} reports submitted`}
+          />
+        ) : (
+          <StatCard
+            label="Reports filed"
+            value={reports.length}
+            tone="success"
+            icon={<CheckCircle2 className="size-5" />}
+            hint={`${completedProjects} projects completed`}
+          />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <section className="surface-card animate-rise lg:col-span-2">
-          <header className="flex items-center justify-between border-b px-5 py-4">
-            <h2 className="font-semibold">{isAdmin ? "Latest projects" : "My projects"}</h2>
-            <Link to="/projects" className="text-primary text-xs font-medium hover:underline">
-              View all
-            </Link>
-          </header>
-          {myProjects.length === 0 ? (
+        <Panel
+          title={isAdmin ? "Latest projects" : isDeptAdmin ? "Department projects" : "My projects"}
+          href="/projects"
+          className="lg:col-span-2"
+        >
+          {projects.length === 0 ? (
             <EmptyState
               className="border-0 bg-transparent shadow-none"
               icon={<FolderKanban className="size-6" />}
               title="No projects yet"
-              description="Create your first project to start tracking work and progress."
+              description="Projects you own or oversee will show up here."
               action={
                 <Link to="/projects">
                   <Button>Create project</Button>
@@ -124,7 +236,7 @@ function Dashboard() {
             />
           ) : (
             <ul className="divide-y">
-              {myProjects.slice(0, 6).map((p) => (
+              {projects.slice(0, 6).map((p) => (
                 <li key={p.id} className="hover:bg-secondary/40 transition-smooth px-5 py-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
@@ -148,17 +260,15 @@ function Dashboard() {
               ))}
             </ul>
           )}
-        </section>
+        </Panel>
 
-        <section className="surface-card animate-rise">
-          <header className="flex items-center justify-between border-b px-5 py-4">
-            <h2 className="font-semibold">Live activity</h2>
-            <ActivityIcon className="text-muted-foreground size-4" />
-          </header>
+        <Panel
+          title={isAdmin || isDeptAdmin ? "Recent activity" : "My activity"}
+          href="/activity"
+          icon={<ActivityIcon className="text-muted-foreground size-4" />}
+        >
           {activities.length === 0 ? (
-            <p className="text-muted-foreground px-5 py-10 text-center text-xs">
-              Activity will appear here as work happens.
-            </p>
+            <Nothing text="Activity will appear here as work happens." />
           ) : (
             <ul className="divide-y">
               {activities.slice(0, 8).map((a) => (
@@ -171,46 +281,128 @@ function Dashboard() {
               ))}
             </ul>
           )}
-        </section>
+        </Panel>
       </div>
 
-      <section className="surface-card animate-rise">
-        <header className="flex items-center justify-between border-b px-5 py-4">
-          <h2 className="font-semibold">Tasks needing attention</h2>
-          <Link to="/tasks" className="text-primary text-xs font-medium hover:underline">
-            View all
-          </Link>
-        </header>
-        {myTasks.filter((t) => t.status !== "done").length === 0 ? (
-          <p className="text-muted-foreground px-5 py-10 text-center text-xs">
-            Nothing outstanding — great work.
-          </p>
-        ) : (
-          <ul className="divide-y">
-            {myTasks
-              .filter((t) => t.status !== "done")
-              .slice(0, 6)
-              .map((t) => (
-                <li
-                  key={t.id}
-                  className="hover:bg-secondary/40 transition-smooth flex flex-wrap items-center gap-3 px-5 py-3"
-                >
-                  {t.status === "blocked" ? (
-                    <TriangleAlert className="text-destructive size-4 shrink-0" />
-                  ) : (
-                    <ListChecks className="text-muted-foreground size-4 shrink-0" />
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-sm">{t.title}</span>
-                  <span className="text-muted-foreground text-xs">{formatDate(t.due_date)}</span>
-                  <StatusBadge
-                    label={labelOf(TASK_STATUSES, t.status)}
-                    tone={toneOf(TASK_STATUSES, t.status)}
-                  />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Panel title={isAdmin || isDeptAdmin ? "Tasks needing attention" : "My tasks"} href="/tasks">
+          {openTasks.length === 0 ? (
+            <Nothing text="Nothing outstanding — great work." />
+          ) : (
+            <ul className="divide-y">
+              {openTasks.slice(0, 7).map((t) => (
+                <TaskRow key={t.id} t={t} />
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel
+          title={isAdmin ? "Company reports" : isDeptAdmin ? "Department reports" : "My reports"}
+          href="/reports"
+          icon={<FileText className="text-muted-foreground size-4" />}
+        >
+          {reports.length === 0 ? (
+            <Nothing text="No reports submitted yet." />
+          ) : (
+            <ul className="divide-y">
+              {reports.slice(0, 7).map((r) => (
+                <li key={r.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="min-w-0 flex-1 truncate text-sm">{r.title}</span>
+                  <span className="text-muted-foreground text-xs capitalize">{r.report_type}</span>
+                  <span className="text-muted-foreground text-xs">{formatDate(r.report_date)}</span>
                 </li>
               ))}
-          </ul>
-        )}
-      </section>
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {isAdmin || isDeptAdmin ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel
+            title={isAdmin ? "Departments" : "My team"}
+            href="/employees"
+            icon={<Building2 className="text-muted-foreground size-4" />}
+          >
+            {isAdmin ? (
+              <ul className="divide-y">
+                {departments.map((d) => {
+                  const staff = allPeople.filter((p) => p.department_id === d.id).length;
+                  const load = allTasks.filter((t) => t.department_id === d.id).length;
+                  return (
+                    <li key={d.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                      <span className="min-w-0 flex-1 truncate font-medium">{d.name}</span>
+                      <span className="text-muted-foreground text-xs">{staff} people</span>
+                      <span className="text-muted-foreground text-xs">{load} tasks</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : people.length === 0 ? (
+              <Nothing text="No one assigned to your department yet." />
+            ) : (
+              <ul className="divide-y">
+                {people.map((p) => (
+                  <li key={p.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                    <span className="min-w-0 flex-1 truncate font-medium">{p.full_name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {allTasks.filter((t) => t.owner_id === p.id && t.status !== "done").length} open
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel
+            title="Customer jobs"
+            href="/customer-jobs"
+            icon={<Briefcase className="text-muted-foreground size-4" />}
+          >
+            {jobs.length === 0 ? (
+              <Nothing text="No customer jobs received yet." />
+            ) : (
+              <ul className="divide-y">
+                {jobs.slice(0, 6).map((j) => (
+                  <li key={j.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                    <span className="min-w-0 flex-1 truncate font-medium">{j.project_title}</span>
+                    <span className="text-muted-foreground truncate text-xs">{j.customer_name}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+      ) : (
+        <Panel
+          title="My files"
+          icon={<Paperclip className="text-muted-foreground size-4" />}
+        >
+          {files.length === 0 ? (
+            <Nothing text="Files you upload to projects, tasks and reports appear here." />
+          ) : (
+            <ul className="divide-y">
+              {files.slice(0, 8).map((f) => (
+                <li key={f.id} className="flex items-center gap-3 px-5 py-3 text-sm">
+                  <Paperclip className="text-muted-foreground size-3.5 shrink-0" />
+                  <a
+                    href={f.file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 flex-1 truncate hover:underline"
+                  >
+                    {f.file_name}
+                  </a>
+                  <span className="text-muted-foreground text-[11px]">
+                    {relativeTime(f.created_at)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      )}
     </>
   );
 }

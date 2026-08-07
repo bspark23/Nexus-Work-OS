@@ -1,4 +1,4 @@
-export type AppRole = "super_admin" | "employee";
+export type AppRole = "super_admin" | "admin" | "employee";
 
 export type Department = {
   id: string;
@@ -49,11 +49,16 @@ export type Task = {
   id: string;
   owner_id: string;
   project_id: string | null;
+  customer_job_id: string | null;
   title: string;
   description: string | null;
   priority: string;
   status: string;
+  progress: number;
+  start_date: string | null;
   due_date: string | null;
+  expected_delivery_date: string | null;
+  completed_at: string | null;
   assigned_by: string | null;
   department_id: string | null;
   notes: string | null;
@@ -83,6 +88,9 @@ export type Attachment = {
   owner_id: string;
   project_id: string | null;
   report_id: string | null;
+  task_id: string | null;
+  customer_job_id: string | null;
+  department_id: string | null;
   file_name: string;
   file_path: string;
   file_url: string;
@@ -98,6 +106,7 @@ export type Activity = {
   action: string;
   entity_type: string;
   entity_id: string | null;
+  department_id: string | null;
   description: string;
   created_at: string;
 };
@@ -106,10 +115,36 @@ export type Notification = {
   id: string;
   user_id: string | null;
   actor_id: string | null;
+  department_id: string | null;
   title: string;
   body: string | null;
   type: string;
   audience: string;
   read: boolean;
+  created_at: string;
+};
+
+export type CustomerJob = {
+  id: string;
+  created_by: string;
+  customer_name: string;
+  company_name: string | null;
+  contact_info: string | null;
+  project_title: string;
+  project_description: string | null;
+  requested_services: string | null;
+  expected_delivery_date: string | null;
+  notes: string | null;
+  source_file_name: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CustomerJobDepartment = {
+  id: string;
+  job_id: string;
+  department_id: string;
+  status: string;
   created_at: string;
 };

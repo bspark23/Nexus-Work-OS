@@ -11,7 +11,24 @@ export const TASK_STATUSES = [
   { value: "in_progress", label: "In Progress", tone: "info" },
   { value: "blocked", label: "Blocked", tone: "destructive" },
   { value: "done", label: "Done", tone: "success" },
+  { value: "expired", label: "Expired", tone: "warning" },
 ] as const;
+
+export const ROLES = [
+  { value: "super_admin", label: "Super Admin" },
+  { value: "admin", label: "Department Admin" },
+  { value: "employee", label: "Employee" },
+] as const;
+
+export const SALES_DEPARTMENT = "Sales";
+
+export const JOB_STATUSES = [
+  { value: "draft", label: "Draft", tone: "neutral" },
+  { value: "submitted", label: "Submitted", tone: "info" },
+  { value: "in_progress", label: "In Progress", tone: "warning" },
+  { value: "completed", label: "Completed", tone: "success" },
+] as const;
+
 
 export const PRIORITIES = [
   { value: "low", label: "Low", tone: "neutral" },

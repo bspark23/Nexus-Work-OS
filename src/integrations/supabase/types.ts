@@ -19,6 +19,7 @@ export type Database = {
           action: string
           actor_id: string
           created_at: string
+          department_id: string | null
           description: string
           entity_id: string | null
           entity_type: string
@@ -28,6 +29,7 @@ export type Database = {
           action: string
           actor_id: string
           created_at?: string
+          department_id?: string | null
           description: string
           entity_id?: string | null
           entity_type: string
@@ -37,16 +39,27 @@ export type Database = {
           action?: string
           actor_id?: string
           created_at?: string
+          department_id?: string | null
           description?: string
           entity_id?: string | null
           entity_type?: string
           id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "activities_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       attachments: {
         Row: {
           created_at: string
+          customer_job_id: string | null
+          department_id: string | null
           file_name: string
           file_path: string
           file_size: number | null
@@ -57,9 +70,12 @@ export type Database = {
           owner_id: string
           project_id: string | null
           report_id: string | null
+          task_id: string | null
         }
         Insert: {
           created_at?: string
+          customer_job_id?: string | null
+          department_id?: string | null
           file_name: string
           file_path: string
           file_size?: number | null
@@ -70,9 +86,12 @@ export type Database = {
           owner_id: string
           project_id?: string | null
           report_id?: string | null
+          task_id?: string | null
         }
         Update: {
           created_at?: string
+          customer_job_id?: string | null
+          department_id?: string | null
           file_name?: string
           file_path?: string
           file_size?: number | null
@@ -83,8 +102,23 @@ export type Database = {
           owner_id?: string
           project_id?: string | null
           report_id?: string | null
+          task_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "attachments_customer_job_id_fkey"
+            columns: ["customer_job_id"]
+            isOneToOne: false
+            referencedRelation: "customer_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "attachments_project_id_fkey"
             columns: ["project_id"]
@@ -99,7 +133,104 @@ export type Database = {
             referencedRelation: "reports"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "attachments_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      customer_job_departments: {
+        Row: {
+          created_at: string
+          department_id: string
+          id: string
+          job_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          id?: string
+          job_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          id?: string
+          job_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_job_departments_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_job_departments_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "customer_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_jobs: {
+        Row: {
+          company_name: string | null
+          contact_info: string | null
+          created_at: string
+          created_by: string
+          customer_name: string
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          project_description: string | null
+          project_title: string
+          requested_services: string | null
+          source_file_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_name?: string | null
+          contact_info?: string | null
+          created_at?: string
+          created_by: string
+          customer_name: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          project_description?: string | null
+          project_title: string
+          requested_services?: string | null
+          source_file_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_name?: string | null
+          contact_info?: string | null
+          created_at?: string
+          created_by?: string
+          customer_name?: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          project_description?: string | null
+          project_title?: string
+          requested_services?: string | null
+          source_file_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       departments: {
         Row: {
@@ -128,6 +259,7 @@ export type Database = {
           audience: string
           body: string | null
           created_at: string
+          department_id: string | null
           id: string
           read: boolean
           title: string
@@ -139,6 +271,7 @@ export type Database = {
           audience?: string
           body?: string | null
           created_at?: string
+          department_id?: string | null
           id?: string
           read?: boolean
           title: string
@@ -150,13 +283,22 @@ export type Database = {
           audience?: string
           body?: string | null
           created_at?: string
+          department_id?: string | null
           id?: string
           read?: boolean
           title?: string
           type?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "notifications_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -350,50 +492,72 @@ export type Database = {
       tasks: {
         Row: {
           assigned_by: string | null
+          completed_at: string | null
           created_at: string
+          customer_job_id: string | null
           department_id: string | null
           description: string | null
           due_date: string | null
+          expected_delivery_date: string | null
           id: string
           notes: string | null
           owner_id: string
           priority: string
+          progress: number
           project_id: string | null
+          start_date: string | null
           status: string
           title: string
           updated_at: string
         }
         Insert: {
           assigned_by?: string | null
+          completed_at?: string | null
           created_at?: string
+          customer_job_id?: string | null
           department_id?: string | null
           description?: string | null
           due_date?: string | null
+          expected_delivery_date?: string | null
           id?: string
           notes?: string | null
           owner_id: string
           priority?: string
+          progress?: number
           project_id?: string | null
+          start_date?: string | null
           status?: string
           title: string
           updated_at?: string
         }
         Update: {
           assigned_by?: string | null
+          completed_at?: string | null
           created_at?: string
+          customer_job_id?: string | null
           department_id?: string | null
           description?: string | null
           due_date?: string | null
+          expected_delivery_date?: string | null
           id?: string
           notes?: string | null
           owner_id?: string
           priority?: string
+          progress?: number
           project_id?: string | null
+          start_date?: string | null
           status?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "tasks_customer_job_id_fkey"
+            columns: ["customer_job_id"]
+            isOneToOne: false
+            referencedRelation: "customer_jobs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "tasks_department_id_fkey"
             columns: ["department_id"]
@@ -433,10 +597,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_dept: { Args: { _dept: string }; Returns: boolean }
+      can_see_job: { Args: { _job_id: string }; Returns: boolean }
       claim_initial_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      current_app_role: { Args: never; Returns: string }
+      expire_overdue_tasks: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -445,9 +613,11 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_dept_admin: { Args: never; Returns: boolean }
+      my_dept: { Args: never; Returns: string }
     }
     Enums: {
-      app_role: "super_admin" | "employee"
+      app_role: "super_admin" | "employee" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -575,7 +745,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["super_admin", "employee"],
+      app_role: ["super_admin", "employee", "admin"],
     },
   },
 } as const
