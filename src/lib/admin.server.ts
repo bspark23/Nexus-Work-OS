@@ -54,8 +54,9 @@ export async function ensureSeedSuperAdmin() {
   await supabaseAdmin.from("user_roles").delete().eq("user_id", userId);
   await supabaseAdmin.from("user_roles").insert({ user_id: userId, role: "super_admin" } as never);
 
-  return { created: true as const };
+  return { created };
 }
+
 
 /** Throws unless the given user id currently holds the super_admin role. */
 export async function assertSuperAdmin(userId: string) {
