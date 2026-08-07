@@ -19,6 +19,8 @@ import {
   Sun,
   Search,
   Sparkles,
+  AlarmClock,
+  Briefcase,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -29,6 +31,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useLiveData } from "@/hooks/useLiveData";
+import { useMyDepartment } from "@/hooks/useData";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { GlobalSearch } from "./GlobalSearch";
