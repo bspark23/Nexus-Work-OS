@@ -212,13 +212,12 @@ function AuthPage() {
 
       <div className="animate-rise relative w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
-          <div className="brand-gradient text-primary-foreground flex size-12 items-center justify-center rounded-2xl shadow-lg">
-            <Sparkles className="size-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold">Nexus Work OS</h1>
-            <p className="text-muted-foreground text-sm">Company work management system</p>
-          </div>
+          <img
+            src="/photo_2026-08-07_15-14-03.png"
+            alt="Company Logo"
+            className="max-h-20 w-auto object-contain"
+          />
+          <p className="text-muted-foreground text-sm">Company work management system</p>
         </div>
 
         {/* First-run banner */}
@@ -390,3 +389,4 @@ function AuthPage() {
     </div>
   );
 }
+

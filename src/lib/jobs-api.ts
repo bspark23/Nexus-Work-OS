@@ -23,49 +23,56 @@ function ts(d: unknown): string {
   return new Date(d as never).toISOString();
 }
 
-/* ─── Saved File (persisted spreadsheet for reuse) ─── */
+/* ─── Saved File (persisted spreadsheet for reuse — shared across admins) ─── */
 
 export type SavedFileRow = Record<string, string>;
 
 export type SavedFile = {
   id: string;
   owner_id: string;
+  owner_name: string;
   file_name: string;
   file_type: "xlsx" | "csv" | "pdf";
-  /** For spreadsheets: column headers */
   columns: string[];
-  /** For spreadsheets: all rows as key-value pairs */
   rows: SavedFileRow[];
-  /** For PDFs: raw text */
   text: string;
   updated_at: string;
   created_at: string;
 };
 
-const SAVED_FILE_DOC = (userId: string) => `saved_files/${userId}`;
-
-/** Load this user's saved file (one per user). */
-export async function fetchSavedFile(userId: string): Promise<SavedFile | null> {
-  const snap = await getDoc(doc(db, "saved_files", userId));
-  if (!snap.exists()) return null;
-  const d = snap.data();
-  return {
-    id: snap.id,
-    ...d,
-    updated_at: ts(d["updated_at"]),
-    created_at: ts(d["created_at"]),
-  } as SavedFile;
+/** Load ALL shared files (admins/super admins see everything). */
+export async function fetchAllSavedFiles(): Promise<SavedFile[]> {
+  const q = query(collection(db, "saved_files"), orderBy("updated_at", "desc"));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => {
+    const data = d.data();
+    return {
+      id: d.id,
+      ...data,
+      updated_at: ts(data["updated_at"]),
+      created_at: ts(data["created_at"]),
+    } as SavedFile;
+  });
 }
 
-/** Save (upsert) this user's file data. */
+/** Load a single saved file by ID. */
+export async function fetchSavedFile(fileId: string): Promise<SavedFile | null> {
+  const snap = await getDoc(doc(db, "saved_files", fileId));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  return { id: snap.id, ...d, updated_at: ts(d["updated_at"]), created_at: ts(d["created_at"]) } as SavedFile;
+}
+
+/** Save (upsert) a shared file — keyed by userId so each user has one active file. */
 export async function upsertSavedFile(
   userId: string,
-  data: Pick<SavedFile, "file_name" | "file_type" | "columns" | "rows" | "text">,
+  data: Pick<SavedFile, "file_name" | "file_type" | "columns" | "rows" | "text"> & { owner_name?: string },
 ): Promise<void> {
   await setDoc(
     doc(db, "saved_files", userId),
     {
       owner_id: userId,
+      owner_name: data.owner_name ?? "",
       ...data,
       updated_at: serverTimestamp(),
       created_at: serverTimestamp(),
@@ -74,17 +81,17 @@ export async function upsertSavedFile(
   );
 }
 
-/** Update only the rows (when user edits cells). */
-export async function updateSavedFileRows(userId: string, rows: SavedFileRow[]): Promise<void> {
-  await updateDoc(doc(db, "saved_files", userId), {
+/** Update only the rows (when user edits cells inline). */
+export async function updateSavedFileRows(fileId: string, rows: SavedFileRow[]): Promise<void> {
+  await updateDoc(doc(db, "saved_files", fileId), {
     rows,
     updated_at: serverTimestamp(),
   });
 }
 
-/** Delete saved file. */
-export async function deleteSavedFile(userId: string): Promise<void> {
-  await deleteDoc(doc(db, "saved_files", userId));
+/** Delete a saved file. */
+export async function deleteSavedFile(fileId: string): Promise<void> {
+  await deleteDoc(doc(db, "saved_files", fileId));
 }
 
 export async function fetchCustomerJobs(): Promise<CustomerJob[]> {

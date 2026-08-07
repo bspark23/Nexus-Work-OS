@@ -65,13 +65,10 @@ const features = [
 
 function Landing() {
   return (
-    <div className="bg-background text-foreground min-h-screen">
+    <div className="bg-background text-foreground min-h-screen hero-gradient">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
         <div className="flex items-center gap-3">
-          <div className="brand-gradient text-primary-foreground flex size-9 items-center justify-center rounded-xl">
-            <Sparkles className="size-4.5" />
-          </div>
-          <span className="font-bold">Nexus Work OS</span>
+          <img src="/photo_2026-08-07_15-14-03.png" alt="Company Logo" className="max-h-10 w-auto object-contain" />
         </div>
         <Link to="/auth">
           <Button size="sm">Sign in</Button>
@@ -121,3 +118,4 @@ function Landing() {
     </div>
   );
 }
+

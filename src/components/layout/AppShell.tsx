@@ -140,14 +140,12 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-3 px-6 py-5">
-      <div className="brand-gradient text-primary-foreground flex size-9 items-center justify-center rounded-xl shadow-lg">
-        <Sparkles className="size-4.5" />
-      </div>
-      <div className="leading-tight">
-        <p className="text-sidebar-accent-foreground text-sm font-bold">Nexus Work OS</p>
-        <p className="text-sidebar-foreground/50 text-[11px]">Company Work Management</p>
-      </div>
+    <div className="flex items-center justify-center px-6 py-4">
+      <img
+        src="/photo_2026-08-07_15-14-03.png"
+        alt="Company Logo"
+        className="max-h-16 w-auto object-contain"
+      />
     </div>
   );
 }
@@ -262,3 +260,4 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+

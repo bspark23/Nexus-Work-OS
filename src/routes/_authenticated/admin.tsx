@@ -91,7 +91,9 @@ function AdminPage() {
     );
   }
 
-  const superAdmins = roles.filter((r) => r.role === "super_admin").length;
+  const superAdminsSorted = [...people.filter((u) => roleMap[u.id] === "super_admin")]
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const originalSuperAdminId = superAdminsSorted[0]?.id;
   const roleMap = Object.fromEntries(roles.map((r) => [r.user_id, r.role]));
 
   /* ─── user handlers ─── */
@@ -236,16 +238,27 @@ function AdminPage() {
   async function deleteUser(p: Profile) {
     if (!confirm(`Delete ${p.full_name}? This cannot be undone.`)) return;
     try {
-      // Guard: can't delete last super admin
+      // Guard: can't delete yourself
+      if (p.id === user?.id) {
+        toast.error("You cannot delete your own account");
+        return;
+      }
+      // Guard: protect the original first Super Admin (earliest created_at)
       if (roleMap[p.id] === "super_admin") {
+        const superAdmins = people.filter((u) => roleMap[u.id] === "super_admin");
+        const sorted = [...superAdmins].sort(
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+        if (sorted[0]?.id === p.id) {
+          toast.error("The original Super Admin account cannot be deleted");
+          return;
+        }
         const superCount = roles.filter((r) => r.role === "super_admin").length;
         if (superCount <= 1) {
           toast.error("Cannot delete the last Super Admin");
           return;
         }
       }
-      // Delete profile and role from Firestore
-      // Note: Firebase Auth account deletion requires Admin SDK — we just deactivate in Firestore
       await updateDoc(doc(db, "profiles", p.id), { status: "suspended" });
       await deleteDoc(doc(db, "user_roles", p.id));
       toast.success("User removed");
@@ -314,7 +327,7 @@ function AdminPage() {
         <StatCard label="Employees" value={people.length} icon={<Users className="size-5" />} />
         <StatCard label="Departments" value={departments.length} tone="info" icon={<Building2 className="size-5" />} />
         <StatCard label="Projects" value={projects.length} tone="success" icon={<FolderKanban className="size-5" />} />
-        <StatCard label="Super Admins" value={superAdmins} tone="warning" icon={<ShieldCheck className="size-5" />} />
+        <StatCard label="Super Admins" value={roles.filter(r => r.role === "super_admin").length} tone="warning" icon={<ShieldCheck className="size-5" />} />
       </div>
 
       <Tabs defaultValue="users">
@@ -349,6 +362,9 @@ function AdminPage() {
                       tone={role === "super_admin" ? "warning" : role === "admin" ? "info" : "neutral"}
                     />
                     {suspended && <StatusBadge label="Suspended" tone="destructive" />}
+                    {p.id === originalSuperAdminId && (
+                      <StatusBadge label="Protected" tone="success" />
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="outline" size="sm" className="h-8 gap-1">
@@ -369,7 +385,7 @@ function AdminPage() {
                         <DropdownMenuItem
                           className="text-destructive"
                           onClick={() => deleteUser(p)}
-                          disabled={p.id === user?.id}
+                          disabled={p.id === user?.id || p.id === originalSuperAdminId}
                         >
                           <Trash2 className="size-4" /> Delete
                         </DropdownMenuItem>
