@@ -1,19 +1,17 @@
 [build]
-  command = "npm install && npm run build"
-  publish = "dist/client"
+  command = "npm install && npm run build:netlify"
+  publish = ".output/public"
 
 [build.environment]
   NODE_VERSION = "22"
-
-# Secrets scanning — these values appear in source as env var references, not actual secrets
-[build.processing]
-  skip_processing = false
+  SECRETS_SCAN_OMIT_PATHS = "FIREBASE_MIGRATION.md,src/integrations/firebase/config.ts,src/integrations/firebase/admin.server.ts"
 
 [[redirects]]
   from = "/*"
-  to = "/index.html"
+  to = "/.netlify/functions/server"
   status = 200
 
-[dev]
-  command = "npm run dev"
-  port = 3000
+[functions]
+  node_bundler = "esbuild"
+  directory = ".output/server"
+  included_files = [".output/server/**"]
