@@ -1,21 +1,19 @@
 [build]
   command = "npm install && npm run build"
-  publish = ".output/public"
-  functions = ".output/server"
+  publish = "dist/client"
 
 [build.environment]
   NODE_VERSION = "22"
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/server"
-  status = 200
+# Secrets scanning — these values appear in source as env var references, not actual secrets
+[build.processing]
+  skip_processing = false
 
 [[redirects]]
   from = "/*"
-  to = "/.netlify/functions/server"
+  to = "/index.html"
   status = 200
 
-[functions]
-  node_bundler = "esbuild"
-  directory = ".output/server"
+[dev]
+  command = "npm run dev"
+  port = 3000

@@ -9,19 +9,23 @@ import { getFirestore } from "firebase-admin/firestore";
 function getAdminApp() {
   if (getApps().length > 0) return getApp();
 
-  const projectId = process.env["FIREBASE_PROJECT_ID"] ?? "workwise-harmoney";
+  const projectId = process.env["FIREBASE_PROJECT_ID"];
   const clientEmail = process.env["FIREBASE_CLIENT_EMAIL"];
   const privateKey = process.env["FIREBASE_PRIVATE_KEY"]?.replace(/\\n/g, "\n");
 
-  if (clientEmail && privateKey) {
+  if (clientEmail && privateKey && projectId) {
     return initializeApp({
       credential: cert({ projectId, clientEmail, privateKey }),
-      storageBucket: process.env["FIREBASE_STORAGE_BUCKET"] ?? "workwise-harmoney.firebasestorage.app",
+      storageBucket: process.env["FIREBASE_STORAGE_BUCKET"],
     });
   }
 
   // Dev fallback: use Application Default Credentials or emulator
-  return initializeApp({ projectId });
+  if (projectId) {
+    return initializeApp({ projectId });
+  }
+
+  throw new Error("Missing FIREBASE_PROJECT_ID environment variable");
 }
 
 const adminApp = getAdminApp();

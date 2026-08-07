@@ -95,19 +95,19 @@ Update your `.env` file:
 
 ```bash
 # Firebase Client (public — safe to expose in browser bundles)
-VITE_FIREBASE_API_KEY="AIzaSyALrUYQYLRf0bIrCWs-ErV9Z7rdtVyv3Ug"
-VITE_FIREBASE_AUTH_DOMAIN="workwise-harmoney.firebaseapp.com"
-VITE_FIREBASE_PROJECT_ID="workwise-harmoney"
-VITE_FIREBASE_STORAGE_BUCKET="workwise-harmoney.firebasestorage.app"
-VITE_FIREBASE_MESSAGING_SENDER_ID="383814708734"
-VITE_FIREBASE_APP_ID="1:383814708734:web:e4664a3f8112de132f64af"
-VITE_FIREBASE_MEASUREMENT_ID="G-ZVLQL51JTN"
+VITE_FIREBASE_API_KEY="your-api-key-here"
+VITE_FIREBASE_AUTH_DOMAIN="your-project.firebaseapp.com"
+VITE_FIREBASE_PROJECT_ID="your-project-id"
+VITE_FIREBASE_STORAGE_BUCKET="your-project.firebasestorage.app"
+VITE_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
+VITE_FIREBASE_APP_ID="1:your-sender-id:web:e4664a3f8112de132f64af"
+VITE_FIREBASE_MEASUREMENT_ID="G-XXXXXXXXXX"
 
 # Firebase Admin SDK (server-side only — NEVER expose to browser)
-FIREBASE_PROJECT_ID="workwise-harmoney"
+FIREBASE_PROJECT_ID="your-project-id"
 FIREBASE_CLIENT_EMAIL="firebase-adminsdk-xxxxx@workwise-harmoney.iam.gserviceaccount.com"
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour-Private-Key-Here\n-----END PRIVATE KEY-----"
-FIREBASE_STORAGE_BUCKET="workwise-harmoney.firebasestorage.app"
+FIREBASE_STORAGE_BUCKET="your-project.firebasestorage.app"
 ```
 
 > **Important**: Replace the values above with your actual Firebase credentials.
@@ -481,3 +481,4 @@ const url = await getDownloadURL(ref(storage, path))
 **Migration completed successfully! 🎉**
 
 For questions or issues, refer to the Firebase Console or check the application logs.
+
