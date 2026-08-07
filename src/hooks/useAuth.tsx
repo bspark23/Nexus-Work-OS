@@ -9,7 +9,13 @@ type AuthCtx = {
   user: User | null;
   profile: Profile | null;
   role: AppRole | null;
+  /** Super Admin — unrestricted, company-wide access. */
   isAdmin: boolean;
+  /** Department Admin — scoped to their own department. */
+  isDeptAdmin: boolean;
+  /** Either kind of admin. */
+  canManage: boolean;
+  departmentId: string | null;
   loading: boolean;
   refreshProfile: () => void;
 };
@@ -20,9 +26,13 @@ const Ctx = createContext<AuthCtx>({
   profile: null,
   role: null,
   isAdmin: false,
+  isDeptAdmin: false,
+  canManage: false,
+  departmentId: null,
   loading: true,
   refreshProfile: () => {},
 });
+
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
