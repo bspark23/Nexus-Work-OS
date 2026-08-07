@@ -91,10 +91,11 @@ function AdminPage() {
     );
   }
 
+  const roleMap = Object.fromEntries(roles.map((r) => [r.user_id, r.role]));
+
   const superAdminsSorted = [...people.filter((u) => roleMap[u.id] === "super_admin")]
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   const originalSuperAdminId = superAdminsSorted[0]?.id;
-  const roleMap = Object.fromEntries(roles.map((r) => [r.user_id, r.role]));
 
   /* ─── user handlers ─── */
   function openAddUser() {
