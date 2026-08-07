@@ -1,6 +1,6 @@
 [build]
-  command = "npm run build:netlify"
-  publish = ".output/public"
+  command = "npm run build"
+  publish = "dist/client"
 
 [build.environment]
   NODE_VERSION = "22"
@@ -12,4 +12,4 @@
   status = 200
 
 [functions]
-  directory = ".output/server"
+  directory = "dist/server"
