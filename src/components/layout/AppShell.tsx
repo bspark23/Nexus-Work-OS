@@ -34,26 +34,47 @@ import { initials } from "@/lib/format";
 import { GlobalSearch } from "./GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
 
-const baseNav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/projects", label: "Projects", icon: FolderKanban },
-  { to: "/tasks", label: "Tasks", icon: ListChecks },
-  { to: "/reports", label: "Reports", icon: FileText },
-  { to: "/activity", label: "Activity", icon: ActivityIcon },
+type NavItem = { to: string; label: string; icon: typeof LayoutDashboard };
+
+const accountNav: NavItem[] = [
   { to: "/profile", label: "Profile", icon: UserRound },
   { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
-const adminNav = [
+function workspaceNav(opts: {
+  isAdmin: boolean;
+  isDeptAdmin: boolean;
+  isSales: boolean;
+}): NavItem[] {
+  const items: NavItem[] = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/projects", label: opts.isAdmin || opts.isDeptAdmin ? "Projects" : "My Projects", icon: FolderKanban },
+    { to: "/tasks", label: opts.isAdmin || opts.isDeptAdmin ? "Tasks" : "My Tasks", icon: ListChecks },
+    { to: "/reports", label: opts.isAdmin || opts.isDeptAdmin ? "Reports" : "My Reports", icon: FileText },
+  ];
+  if (opts.isAdmin || opts.isDeptAdmin) {
+    items.push({ to: "/overdue", label: "Overdue Tasks", icon: AlarmClock });
+  }
+  if (opts.isSales || opts.isAdmin || opts.isDeptAdmin) {
+    items.push({ to: "/customer-jobs", label: "Customer Jobs", icon: Briefcase });
+  }
+  items.push({ to: "/activity", label: opts.isAdmin || opts.isDeptAdmin ? "Activity" : "My Activity", icon: ActivityIcon });
+  return items;
+}
+
+const deptAdminNav: NavItem[] = [{ to: "/employees", label: "My Team", icon: Users }];
+
+const superAdminNav: NavItem[] = [
   { to: "/departments", label: "Departments", icon: Building2 },
   { to: "/employees", label: "Employees", icon: Users },
   { to: "/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/company-reports", label: "Company Reports", icon: ClipboardList },
   { to: "/admin", label: "Admin Panel", icon: ShieldCheck },
-] as const;
+];
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isDeptAdmin } = useAuth();
+  const { isSales } = useMyDepartment();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const item = (to: string, label: string, Icon: typeof LayoutDashboard) => {
@@ -84,29 +105,32 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
     );
   };
 
+  const management = isAdmin ? superAdminNav : isDeptAdmin ? deptAdminNav : [];
+
   return (
     <nav className="space-y-1 px-3">
       <p className="text-sidebar-foreground/40 px-3 pt-2 pb-2 text-[11px] font-semibold tracking-widest uppercase">
         Workspace
       </p>
-      {baseNav.slice(0, 5).map((n) => item(n.to, n.label, n.icon))}
+      {workspaceNav({ isAdmin, isDeptAdmin, isSales }).map((n) => item(n.to, n.label, n.icon))}
 
-      {isAdmin ? (
+      {management.length ? (
         <>
           <p className="text-sidebar-foreground/40 px-3 pt-5 pb-2 text-[11px] font-semibold tracking-widest uppercase">
-            Administration
+            {isAdmin ? "Administration" : "Department"}
           </p>
-          {adminNav.map((n) => item(n.to, n.label, n.icon))}
+          {management.map((n) => item(n.to, n.label, n.icon))}
         </>
       ) : null}
 
       <p className="text-sidebar-foreground/40 px-3 pt-5 pb-2 text-[11px] font-semibold tracking-widest uppercase">
         Account
       </p>
-      {baseNav.slice(5).map((n) => item(n.to, n.label, n.icon))}
+      {accountNav.map((n) => item(n.to, n.label, n.icon))}
     </nav>
   );
 }
+
 
 function Brand() {
   return (
