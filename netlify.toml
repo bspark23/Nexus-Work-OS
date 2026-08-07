@@ -14,3 +14,12 @@
 [functions]
   directory = "dist/server"
   node_bundler = "esbuild"
+  external_node_modules = [
+    "firebase-admin",
+    "firebase-admin/app",
+    "firebase-admin/auth",
+    "firebase-admin/firestore",
+    "jwks-rsa",
+    "jose"
+  ]
+  included_files = ["dist/server/**"]
