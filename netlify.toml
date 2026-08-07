@@ -13,13 +13,5 @@
 
 [functions]
   directory = "dist/server"
-  node_bundler = "esbuild"
-  external_node_modules = [
-    "firebase-admin",
-    "firebase-admin/app",
-    "firebase-admin/auth",
-    "firebase-admin/firestore",
-    "jwks-rsa",
-    "jose"
-  ]
+  node_bundler = "nft"
   included_files = ["dist/server/**"]
