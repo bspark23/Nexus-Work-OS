@@ -13,5 +13,6 @@
 
 [functions]
   directory = "dist/server"
-  node_bundler = "nft"
-  included_files = ["dist/server/**"]
+  node_bundler = "esbuild"
+  [functions.config]
+    format = "esm"
