@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects } from "@/hooks/useData";
+import { useProjects, useProfiles } from "@/hooks/useData";
 import { deleteProject, saveProject, track } from "@/lib/api";
 import { PRIORITIES, PROJECT_STATUSES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -55,8 +55,9 @@ const empty: Partial<Project> = {
 };
 
 function ProjectsPage() {
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
   const { data: projects = [] } = useProjects();
+  const { data: allProfiles = [] } = useProfiles(canManage);
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -89,7 +90,7 @@ function ProjectsPage() {
     <>
       <PageHeader
         title="Projects"
-        subtitle={isAdmin ? "Every project across the company." : "Projects you own and deliver."}
+        subtitle={isAdmin ? "Every project across the company." : isDeptAdmin ? "All projects in your department." : "Projects you own and deliver."}
         actions={
           <>
             <Select value={filter} onValueChange={setFilter}>
@@ -135,13 +136,25 @@ function ProjectsPage() {
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visible.map((p) => (
+          {visible.map((p) => {
+            const ownerName = canManage
+              ? allProfiles.find((u) => u.id === p.owner_id)?.full_name
+              : null;
+            return (
             <article
               key={p.id}
               className="surface-card animate-rise transition-smooth hover:shadow-lifted flex flex-col gap-3 p-5 hover:-translate-y-0.5"
             >
               <div className="flex items-start justify-between gap-2">
-                <h2 className="font-semibold">{p.title}</h2>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold truncate">{p.title}</h2>
+                  {ownerName && (
+                    <p className="text-muted-foreground text-xs mt-0.5">
+                      👤 {ownerName}
+                      {p.project_type ? ` · ${p.project_type}` : ""}
+                    </p>
+                  )}
+                </div>
                 <StatusBadge
                   label={labelOf(PROJECT_STATUSES, p.status)}
                   tone={toneOf(PROJECT_STATUSES, p.status)}
@@ -190,7 +203,8 @@ function ProjectsPage() {
                 )}
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       )}
 
