@@ -103,7 +103,7 @@ export async function createManagedUser(input: {
   email: string;
   password: string;
   departmentId: string | null;
-  jobTitle?: string | null;
+  jobTitle?: string | null | undefined;
   role: Role;
 }) {
   const authEmail = `${input.username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "")}@nexus-workos.internal`;
@@ -178,7 +178,12 @@ export async function removeUser(targetId: string, callerId: string) {
 
 export async function updateManagedProfile(
   targetId: string,
-  patch: { full_name?: string; email?: string; department_id?: string | null; job_title?: string | null },
+  patch: {
+    full_name?: string | undefined;
+    email?: string | undefined;
+    department_id?: string | null | undefined;
+    job_title?: string | null | undefined;
+  },
 ) {
   const { error } = await supabaseAdmin
     .from("profiles")
