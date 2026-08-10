@@ -260,10 +260,14 @@ function AdminPage() {
           return;
         }
       }
-      await updateDoc(doc(db, "profiles", p.id), { status: "suspended" });
-      await deleteDoc(doc(db, "user_roles", p.id));
-      toast.success("User removed");
-      qc.invalidateQueries();
+      // Delete profile document and role document — this removes them from all counts
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "profiles", p.id));
+      batch.delete(doc(db, "user_roles", p.id));
+      await batch.commit();
+      toast.success(`${p.full_name} has been deleted`);
+      qc.invalidateQueries({ queryKey: ["profiles"] });
+      qc.invalidateQueries({ queryKey: ["user_roles"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove user");
     }
@@ -309,11 +313,34 @@ function AdminPage() {
   }
 
   async function handleDeleteDept(d: Department) {
-    if (!confirm(`Delete department "${d.name}"? This cannot be undone.`)) return;
+    const memberCount = people.filter((p) => p.department_id === d.id).length;
+    const confirmMsg = memberCount > 0
+      ? `Delete department "${d.name}"? ${memberCount} member${memberCount > 1 ? "s" : ""} will be moved to Unassigned so you can reassign them.`
+      : `Delete department "${d.name}"? This cannot be undone.`;
+    if (!confirm(confirmMsg)) return;
     try {
+      // 1. Null out department_id on all members of this department
+      const members = people.filter((p) => p.department_id === d.id);
+      if (members.length > 0) {
+        // Batch in chunks of 400 (Firestore max 500 per batch)
+        for (let i = 0; i < members.length; i += 400) {
+          const chunk = members.slice(i, i + 400);
+          const batch = writeBatch(db);
+          chunk.forEach((m) =>
+            batch.update(doc(db, "profiles", m.id), { department_id: null }),
+          );
+          await batch.commit();
+        }
+      }
+      // 2. Delete the department document
       await deleteDepartment(d.id);
-      toast.success("Department deleted");
-      qc.invalidateQueries();
+      toast.success(
+        memberCount > 0
+          ? `"${d.name}" deleted — ${memberCount} member${memberCount > 1 ? "s" : ""} moved to Unassigned`
+          : `"${d.name}" deleted`,
+      );
+      qc.invalidateQueries({ queryKey: ["departments"] });
+      qc.invalidateQueries({ queryKey: ["profiles"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not delete department");
     }
