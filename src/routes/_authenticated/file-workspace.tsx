@@ -167,6 +167,23 @@ function FileWorkspacePage() {
     setDirty(false);
   }
 
+  // Navigate to customer-jobs with the current active file pre-filled
+  function useForNewJob() {
+    if (!activeFileData) return;
+    // Store the selected file rows in sessionStorage so customer-jobs can read them
+    const rows = editRows ?? activeFileData.rows ?? [];
+    if (rows.length > 0) {
+      sessionStorage.setItem("prefill_job_file", JSON.stringify({
+        file_name: activeFileData.file_name,
+        rows,
+        columns: activeFileData.columns,
+      }));
+      navigate({ to: "/customer-jobs", search: { fromFile: "1", fileId: undefined } });
+    } else {
+      toast.error("The file has no rows to use for pre-filling");
+    }
+  }
+
   const sharedFiles = (isAdmin || isDeptAdmin) ? allFiles : [];
 
   return (
@@ -189,7 +206,7 @@ function FileWorkspacePage() {
                     <Download className="size-4" /> Export CSV
                   </Button>
                 )}
-                <Button onClick={() => navigate({ to: "/customer-jobs", search: { fromFile: "1" } })} size="sm">
+                <Button onClick={useForNewJob} size="sm">
                   <Table2 className="size-4" /> Use for new job
                 </Button>
               </>

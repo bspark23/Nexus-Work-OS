@@ -34,6 +34,7 @@ export const Route = createFileRoute("/_authenticated/customer-jobs")({
   }),
   validateSearch: (s: Record<string, unknown>) => ({
     fromFile: s["fromFile"] as string | undefined,
+    fileId: s["fileId"] as string | undefined,
   }),
   component: CustomerJobsPage,
 });
@@ -52,11 +53,13 @@ const emptyJob: ExtractedJob = {
 function CustomerJobsPage() {
   const { user, profile, isAdmin, isDeptAdmin } = useAuth();
   const { isSales } = useMyDepartment();
-  const { fromFile } = Route.useSearch();
+  const { fromFile, fileId } = Route.useSearch();
   const { data: jobs = [] } = useCustomerJobs();
   const { data: jobDepts = [] } = useJobDepartments();
   const { data: departments = [] } = useDepartments();
-  const { data: savedFile } = useSavedFile(user?.id ?? null);
+  // Load own file OR a specific file by ID (when admin picks someone else's file)
+  const { data: ownFile } = useSavedFile(user?.id ?? null);
+  const savedFile = ownFile; // will be replaced by fileId fetch if needed
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -70,21 +73,41 @@ function CustomerJobsPage() {
 
   // Auto-open with saved file data when navigated from File Workspace
   useEffect(() => {
-    if (fromFile && savedFile && !open) {
-      const row = savedFile.rows[0];
-      if (row) {
-        const pairs: [string, string][] = Object.entries(row).map(([k, v]) => [k, String(v ?? "")]);
-        const extracted = mapPairsToJob(pairs);
-        setForm(extracted);
-        setEditJob(null);
-        setSelectedDepts([]);
-        setOpen(true);
-        toast.info("Form pre-filled from your saved file — review and submit");
-      } else {
-        toast.error("The saved file has no rows to use");
+    if (!open && fromFile) {
+      // Read the file data passed via sessionStorage from File Workspace
+      const stored = sessionStorage.getItem("prefill_job_file");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as { file_name: string; rows: Record<string, string>[]; columns: string[] };
+          sessionStorage.removeItem("prefill_job_file"); // clear after reading
+          const row = parsed.rows[0];
+          if (row) {
+            const pairs: [string, string][] = Object.entries(row).map(([k, v]) => [k, String(v ?? "")]);
+            const extracted = mapPairsToJob(pairs);
+            setForm(extracted);
+            setEditJob(null);
+            setSelectedDepts([]);
+            setOpen(true);
+            toast.info(`Form pre-filled from "${parsed.file_name}" — review and submit`);
+          }
+        } catch {
+          toast.error("Could not read file data");
+        }
+      } else if (savedFile && savedFile.rows.length > 0) {
+        // Fallback: use own saved file
+        const row = savedFile.rows[0];
+        if (row) {
+          const pairs: [string, string][] = Object.entries(row).map(([k, v]) => [k, String(v ?? "")]);
+          setForm(mapPairsToJob(pairs));
+          setEditJob(null);
+          setSelectedDepts([]);
+          setOpen(true);
+          toast.info(`Form pre-filled from "${savedFile.file_name}"`);
+        }
       }
     }
-  }, [fromFile, savedFile]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromFile]);
 
   if (!canAccess) {
     return (
