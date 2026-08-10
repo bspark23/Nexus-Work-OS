@@ -18,11 +18,14 @@ export function UserPicker({
   value,
   onChange,
   placeholder = "Select a person",
+  compact = false,
 }: {
   people: Profile[];
   value: string | null;
   onChange: (id: string | null) => void;
   placeholder?: string;
+  /** Compact mode for use inside table cells */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = people.find((p) => p.id === value);
@@ -35,16 +38,19 @@ export function UserPicker({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn(
+            "w-full justify-between font-normal",
+            compact ? "h-7 text-xs border-0 bg-transparent px-1.5" : ""
+          )}
         >
-          <span className="flex min-w-0 items-center gap-2">
-            <UserRound className="text-muted-foreground size-4 shrink-0" />
+          <span className="flex min-w-0 items-center gap-1.5">
+            <UserRound className={cn("text-muted-foreground shrink-0", compact ? "size-3" : "size-4")} />
             <span className="truncate">{selected ? selected.full_name : placeholder}</span>
           </span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className={cn("shrink-0 opacity-50", compact ? "size-3" : "size-4")} />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-56 p-0" align="start">
         <Command>
           <CommandInput placeholder="Search people…" />
           <CommandList>

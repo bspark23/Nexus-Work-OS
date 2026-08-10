@@ -10,7 +10,7 @@ import {
   fetchRoles,
   fetchTasks,
 } from "@/lib/api";
-import { fetchCustomerJobs, fetchJobDepartments, fetchSavedFile, fetchAllSavedFiles } from "@/lib/jobs-api";
+import { fetchCustomerJobs, fetchJobDepartments, fetchSavedFile, fetchAllSavedFiles, fetchSharedTracker } from "@/lib/jobs-api";
 import { useAuth } from "./useAuth";
 import { SALES_DEPARTMENT } from "@/lib/constants";
 
@@ -63,6 +63,15 @@ export const useAllSavedFiles = (enabled = true) =>
     queryKey: ["saved_files_all"],
     queryFn: fetchAllSavedFiles,
     enabled,
+  });
+
+export const useSharedTracker = (enabled = true) =>
+  useQuery({
+    queryKey: ["shared_tracker"],
+    queryFn: fetchSharedTracker,
+    enabled,
+    staleTime: 10_000, // refresh every 10s in background
+    refetchInterval: 15_000, // poll every 15s so teammates see each other's edits
   });
 
 /** Name of the department the signed-in user belongs to. */

@@ -94,6 +94,48 @@ export async function deleteSavedFile(fileId: string): Promise<void> {
   await deleteDoc(doc(db, "saved_files", fileId));
 }
 
+/* ─── Shared Sales Tracker (one shared document for the whole sales team) ─── */
+
+export type TrackerSheetData = {
+  id: string;
+  name: string;
+  rows: Array<Record<string, string>>;
+};
+
+export type SharedTrackerDoc = {
+  sheets: TrackerSheetData[];
+  updated_at: string;
+  updated_by: string | null;
+};
+
+const SHARED_TRACKER_ID = "shared";
+
+export async function fetchSharedTracker(): Promise<SharedTrackerDoc | null> {
+  const snap = await getDoc(doc(db, "sales_tracker", SHARED_TRACKER_ID));
+  if (!snap.exists()) return null;
+  const d = snap.data();
+  return {
+    sheets: (d["sheets"] as TrackerSheetData[]) ?? [],
+    updated_at: ts(d["updated_at"]),
+    updated_by: (d["updated_by"] as string | null) ?? null,
+  };
+}
+
+export async function saveSharedTracker(
+  sheets: TrackerSheetData[],
+  updatedBy: string,
+): Promise<void> {
+  await setDoc(
+    doc(db, "sales_tracker", SHARED_TRACKER_ID),
+    {
+      sheets,
+      updated_by: updatedBy,
+      updated_at: serverTimestamp(),
+    },
+    { merge: false },
+  );
+}
+
 export async function fetchCustomerJobs(): Promise<CustomerJob[]> {
   const q = query(collection(db, "customer_jobs"), orderBy("created_at", "desc"));
   const snap = await getDocs(q);
