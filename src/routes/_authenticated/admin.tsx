@@ -2,13 +2,13 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Building2, FolderKanban, ShieldCheck, Users, Plus, Pencil,
-  Trash2, UserX, UserCheck, ChevronDown, Loader2,
+  Trash2, UserX, UserCheck, ChevronDown, Loader2, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   doc, setDoc, updateDoc, deleteDoc, collection, addDoc,
-  getDocs, query, where, serverTimestamp,
+  getDocs, query, where, serverTimestamp, writeBatch,
 } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
@@ -319,10 +319,73 @@ function AdminPage() {
     }
   }
 
+  /* ─── clear all data (original super admin only) ─── */
+  const [clearing, setClearing] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState("");
+
+  async function clearAllData() {
+    if (clearConfirmText !== "CLEAR ALL DATA") {
+      toast.error('Type "CLEAR ALL DATA" to confirm');
+      return;
+    }
+    setClearing(true);
+    try {
+      // Collections to clear (keep profiles and user_roles to preserve accounts)
+      const collections = [
+        "projects", "tasks", "reports", "activities",
+        "notifications", "attachments", "customer_jobs",
+        "customer_job_departments", "saved_files",
+      ];
+
+      for (const col of collections) {
+        const snap = await getDocs(collection(db, col));
+        // Firestore batch max 500 writes
+        const chunks: typeof snap.docs[] = [];
+        for (let i = 0; i < snap.docs.length; i += 400) {
+          chunks.push(snap.docs.slice(i, i + 400));
+        }
+        for (const chunk of chunks) {
+          const batch = writeBatch(db);
+          chunk.forEach((d) => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+
+      toast.success("All data cleared. The app is now ready for production use.");
+      setClearConfirmOpen(false);
+      setClearConfirmText("");
+      qc.invalidateQueries();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not clear data");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   /* ─── render ─── */
   return (
     <>
       <PageHeader title="Admin Panel" subtitle="Manage users, departments and company-wide settings." />
+
+      {/* Clear All Data — only for the original (undeletable) super admin */}
+      {user?.id === originalSuperAdminId && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-sm text-destructive">Reset App Data</p>
+            <p className="text-muted-foreground text-xs">
+              Clear all projects, tasks, reports, activities and files to start fresh for production. User accounts are kept.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => { setClearConfirmText(""); setClearConfirmOpen(true); }}
+          >
+            <AlertTriangle className="size-4" /> Clear All Data
+          </Button>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Employees" value={people.length} icon={<Users className="size-5" />} />
@@ -529,6 +592,42 @@ function AdminPage() {
             <Button onClick={submitDept} disabled={deptBusy || !deptForm.name}>
               {deptBusy ? <Loader2 className="size-4 animate-spin" /> : null}
               {editDept ? "Save changes" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* ── Clear All Data Confirmation Dialog ── */}
+      <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="size-5" /> Clear All Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm">
+              This will permanently delete all <strong>projects, tasks, reports, activities, notifications, file uploads,</strong> and <strong>customer jobs</strong>. User accounts are kept.
+            </p>
+            <p className="text-sm font-medium">Data stored in Firebase is permanent — it will not disappear on its own once you start using the app for real.</p>
+            <div className="space-y-2">
+              <Label>Type <span className="font-mono text-destructive">CLEAR ALL DATA</span> to confirm</Label>
+              <Input
+                value={clearConfirmText}
+                onChange={(e) => setClearConfirmText(e.target.value)}
+                placeholder="CLEAR ALL DATA"
+                className="font-mono"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={clearAllData}
+              disabled={clearing || clearConfirmText !== "CLEAR ALL DATA"}
+            >
+              {clearing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {clearing ? "Clearing…" : "Clear everything"}
             </Button>
           </DialogFooter>
         </DialogContent>

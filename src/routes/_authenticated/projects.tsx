@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useProjects, useProfiles } from "@/hooks/useData";
+import { useProjects, useProfiles, useDepartments } from "@/hooks/useData";
 import { deleteProject, saveProject, track } from "@/lib/api";
 import { PRIORITIES, PROJECT_STATUSES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -58,6 +58,7 @@ function ProjectsPage() {
   const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
   const { data: projects = [] } = useProjects();
   const { data: allProfiles = [] } = useProfiles(canManage);
+  const { data: departments = [] } = useDepartments();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -68,7 +69,7 @@ function ProjectsPage() {
   async function submit() {
     if (!draft.title || !user) return;
     try {
-      const id = await saveProject({ ...draft, owner_id: draft.owner_id ?? user.id });
+      const id = await saveProject({ ...draft, owner_id: draft.owner_id ?? user.id, department_id: draft.department_id ?? (isDeptAdmin ? profile?.department_id ?? null : null), });
       await track({
         actorId: user.id,
         actorName: profile?.full_name ?? "Someone",
@@ -140,6 +141,9 @@ function ProjectsPage() {
             const ownerName = canManage
               ? allProfiles.find((u) => u.id === p.owner_id)?.full_name
               : null;
+            const deptName = canManage
+              ? departments.find((d) => d.id === p.department_id)?.name
+              : null;
             return (
             <article
               key={p.id}
@@ -148,10 +152,11 @@ function ProjectsPage() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <h2 className="font-semibold truncate">{p.title}</h2>
-                  {ownerName && (
-                    <p className="text-muted-foreground text-xs mt-0.5">
-                      👤 {ownerName}
-                      {p.project_type ? ` · ${p.project_type}` : ""}
+                  {(ownerName || deptName) && (
+                    <p className="text-muted-foreground text-xs mt-0.5 flex flex-wrap gap-x-2">
+                      {ownerName && <span>👤 {ownerName}</span>}
+                      {deptName && <span>🏢 {deptName}</span>}
+                      {p.project_type && <span>{p.project_type}</span>}
                     </p>
                   )}
                 </div>
@@ -230,6 +235,23 @@ function ProjectsPage() {
                   onChange={(e) => setDraft({ ...draft, project_type: e.target.value })}
                 />
               </div>
+              {isAdmin && (
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <Select
+                    value={draft.department_id ?? ""}
+                    onValueChange={(v) => setDraft({ ...draft, department_id: v || null })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Assign to department…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No department</SelectItem>
+                      {departments.map((d) => (
+                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Due date</Label>
                 <Input
@@ -312,3 +334,4 @@ function ProjectsPage() {
     </>
   );
 }
+
