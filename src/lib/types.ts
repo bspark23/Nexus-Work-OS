@@ -73,6 +73,18 @@ export type Task = {
   updated_at: string;
 };
 
+export type ReportProjectRow = {
+  s_no: string;
+  brand_name: string;
+  project_type: string;
+  date_received: string;
+  received_from: string;
+  time_received: string;
+  date_delivered: string;
+  delivered_to: string;
+  time_delivered: string;
+};
+
 export type Report = {
   id: string;
   author_id: string;
@@ -93,6 +105,29 @@ export type Report = {
   /** Optional uploaded file stored as base64 data URL */
   attached_file: string | null;
   attached_file_name: string | null;
+  // ── iBrand Weekly Performance Report structured fields ────────────
+  // INDIVIDUAL INFORMATION
+  report_employee_name: string | null;
+  report_designation: string | null;
+  report_week_ending: string | null;
+  report_supervisor: string | null;
+  // PROJECTS TABLE
+  report_projects: ReportProjectRow[] | null;
+  // PERFORMANCE SUMMARY
+  perf_projects_received: string | null;
+  perf_projects_delivered: string | null;
+  perf_projects_ongoing: string | null;
+  perf_pending_feedback: string | null;
+  perf_remark: string | null;
+  // SELF EVALUATION
+  self_eval_rating: "excellent" | "good" | "fair" | "sum_optimal" | "poor" | string | null;
+  self_eval_strategies: string | null;
+  self_eval_improvement: string | null;
+  self_eval_upcoming: string | null;
+  self_eval_challenges: string | null;
+  // SUPERVISOR
+  supervisor_remark: string | null;
+  supervisor_sign_date: string | null;
   created_at: string;
   updated_at: string;
 };
