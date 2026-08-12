@@ -25,6 +25,7 @@ import { Route as AuthenticatedOverdueRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticated/reports'
+import { Route as AuthenticatedSalesTrackerRouteImport } from './routes/_authenticated/sales-tracker'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedTasksRouteImport } from './routes/_authenticated/tasks'
 import { Route as ApiPublicBootstrapRouteImport } from './routes/api/public/bootstrap'
@@ -112,6 +113,12 @@ const AuthenticatedReportsRoute = AuthenticatedReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedSalesTrackerRoute =
+  AuthenticatedSalesTrackerRouteImport.update({
+    id: '/sales-tracker',
+    path: '/sales-tracker',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -144,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AuthenticatedProfileRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/sales-tracker': typeof AuthenticatedSalesTrackerRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/api/public/bootstrap': typeof ApiPublicBootstrapRoute
@@ -164,6 +172,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AuthenticatedProfileRoute
   '/projects': typeof AuthenticatedProjectsRoute
   '/reports': typeof AuthenticatedReportsRoute
+  '/sales-tracker': typeof AuthenticatedSalesTrackerRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tasks': typeof AuthenticatedTasksRoute
   '/api/public/bootstrap': typeof ApiPublicBootstrapRoute
@@ -186,6 +195,7 @@ export interface FileRoutesById {
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
+  '/_authenticated/sales-tracker': typeof AuthenticatedSalesTrackerRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tasks': typeof AuthenticatedTasksRoute
   '/api/public/bootstrap': typeof ApiPublicBootstrapRoute
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/reports'
+    | '/sales-tracker'
     | '/settings'
     | '/tasks'
     | '/api/public/bootstrap'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/projects'
     | '/reports'
+    | '/sales-tracker'
     | '/settings'
     | '/tasks'
     | '/api/public/bootstrap'
@@ -249,6 +261,7 @@ export interface FileRouteTypes {
     | '/_authenticated/profile'
     | '/_authenticated/projects'
     | '/_authenticated/reports'
+    | '/_authenticated/sales-tracker'
     | '/_authenticated/settings'
     | '/_authenticated/tasks'
     | '/api/public/bootstrap'
@@ -375,6 +388,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReportsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/sales-tracker': {
+      id: '/_authenticated/sales-tracker'
+      path: '/sales-tracker'
+      fullPath: '/sales-tracker'
+      preLoaderRoute: typeof AuthenticatedSalesTrackerRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
@@ -413,6 +433,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
+  AuthenticatedSalesTrackerRoute: typeof AuthenticatedSalesTrackerRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTasksRoute: typeof AuthenticatedTasksRoute
 }
@@ -431,6 +452,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
+  AuthenticatedSalesTrackerRoute: AuthenticatedSalesTrackerRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTasksRoute: AuthenticatedTasksRoute,
 }

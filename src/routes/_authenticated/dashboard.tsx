@@ -118,7 +118,7 @@ function Dashboard() {
   const { data: allPeople = [] } = useProfiles();
   const { data: allActivities = [] } = useActivities();
   const { data: departments = [] } = useDepartments();
-  const { data: jobs = [] } = useCustomerJobs(isSales || isAdmin || isDeptAdmin);
+  const { data: jobs = [] } = useCustomerJobs(true);
   const { data: files = [] } = useAttachments();
 
   const projects = scopeProjects(allProjects, scope);
@@ -403,6 +403,44 @@ function Dashboard() {
           )}
         </Panel>
       )}
+
+      {/* Assigned Customer Jobs Panel for assigned employees & Super Admin */}
+      {(() => {
+        const assignedJobs = isAdmin
+          ? jobs.filter((j) => !!j.assigned_employee_id)
+          : jobs.filter((j) => j.assigned_employee_id === profile?.id);
+        if (assignedJobs.length === 0 && !isAdmin) return null;
+        return (
+          <Panel
+            title={isAdmin ? "Assigned Customer Jobs (Company-wide)" : "Customer Jobs Assigned to Me"}
+            href="/customer-jobs"
+            icon={<Briefcase className="text-muted-foreground size-4" />}
+            className="mt-6"
+          >
+            {assignedJobs.length === 0 ? (
+              <Nothing text="No customer jobs assigned yet." />
+            ) : (
+              <ul className="divide-y">
+                {assignedJobs.slice(0, 6).map((j) => {
+                  const assignedUser = allPeople.find((p) => p.id === j.assigned_employee_id);
+                  return (
+                    <li key={j.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{j.project_title}</p>
+                        <p className="text-muted-foreground text-xs">Customer: {j.customer_name} {j.company_name ? `(${j.company_name})` : ""}</p>
+                      </div>
+                      {isAdmin && assignedUser && (
+                        <StatusBadge label={`Assigned to: ${assignedUser.full_name}`} tone="info" />
+                      )}
+                      <StatusBadge label={labelOf(PROJECT_STATUSES, j.status)} tone={toneOf(PROJECT_STATUSES, j.status)} />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+        );
+      })()}
     </>
   );
 }

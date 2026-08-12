@@ -27,32 +27,28 @@ export const Route = createFileRoute("/_authenticated/departments")({
 type Tab = "members" | "projects" | "tasks" | null;
 
 function DepartmentsPage() {
-  const { isAdmin } = useAuth();
+  const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
   const navigate = useNavigate();
   const { data: departments = [] } = useDepartments();
-  const { data: people = [] } = useProfiles(isAdmin);
-  const { data: projects = [] } = useProjects(isAdmin);
-  const { data: tasks = [] } = useTasks(isAdmin);
-  const { data: roles = [] } = useRoles(isAdmin);
+  const { data: people = [] } = useProfiles(true);
+  const { data: projects = [] } = useProjects(true);
+  const { data: tasks = [] } = useTasks(true);
+  const { data: roles = [] } = useRoles(canManage);
 
-  // Track which dept+tab is expanded
+  const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<{ deptId: string; tab: Tab } | null>(null);
 
   function toggleTab(deptId: string, tab: Tab) {
     if (expanded?.deptId === deptId && expanded.tab === tab) {
-      setExpanded(null); // collapse
+      setExpanded(null);
     } else {
       setExpanded({ deptId, tab });
     }
   }
 
-  if (!isAdmin) {
-    return (
-      <div className="text-muted-foreground flex h-60 items-center justify-center text-sm">
-        Super Admin access required.
-      </div>
-    );
-  }
+  const displayedDepts = selectedDeptId
+    ? departments.filter((d) => d.id === selectedDeptId)
+    : departments;
 
   return (
     <>
@@ -67,8 +63,30 @@ function DepartmentsPage() {
           </Link>
         }
       />
+
+      {/* Department Filter Buttons */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <Button
+          variant={selectedDeptId === null ? "default" : "outline"}
+          size="sm"
+          onClick={() => setSelectedDeptId(null)}
+        >
+          All Departments ({departments.length})
+        </Button>
+        {departments.map((d) => (
+          <Button
+            key={d.id}
+            variant={selectedDeptId === d.id ? "default" : "outline"}
+            size="sm"
+            onClick={() => setSelectedDeptId(d.id)}
+          >
+            {d.name}
+          </Button>
+        ))}
+      </div>
+
       <div className="space-y-4">
-        {departments.map((d) => {
+        {displayedDepts.map((d) => {
           const staff = people.filter((p) => p.department_id === d.id);
           const deptProjects = projects.filter((p) => p.department_id === d.id);
           const deptTasks = tasks.filter((t) => t.department_id === d.id);

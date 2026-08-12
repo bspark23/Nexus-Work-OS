@@ -14,8 +14,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useMyDepartment, useCustomerJobs, useJobDepartments, useDepartments, useSavedFile } from "@/hooks/useData";
+import { useMyDepartment, useCustomerJobs, useJobDepartments, useDepartments, useSavedFile, useProfiles, useRoles } from "@/hooks/useData";
 import { createCustomerJob, deleteCustomerJob, updateCustomerJob } from "@/lib/jobs-api";
 import { JOB_STATUSES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -59,13 +62,15 @@ function CustomerJobsPage() {
   const { data: departments = [] } = useDepartments();
   // Load own file OR a specific file by ID (when admin picks someone else's file)
   const { data: ownFile } = useSavedFile(user?.id ?? null);
-  const savedFile = ownFile; // will be replaced by fileId fetch if needed
+  const { data: allProfiles = [] } = useProfiles();
+  const { data: roles = [] } = useRoles();
   const qc = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [editJob, setEditJob] = useState<CustomerJob | null>(null);
   const [form, setForm] = useState<ExtractedJob>(emptyJob);
   const [selectedDepts, setSelectedDepts] = useState<string[]>([]);
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState<string>("");
   const [uploading, setUploading] = useState(false);
 
   // Gate: only Sales employees, dept admins, and super admins
@@ -93,16 +98,16 @@ function CustomerJobsPage() {
         } catch {
           toast.error("Could not read file data");
         }
-      } else if (savedFile && savedFile.rows.length > 0) {
+      } else if (ownFile && ownFile.rows.length > 0) {
         // Fallback: use own saved file
-        const row = savedFile.rows[0];
+        const row = ownFile.rows[0];
         if (row) {
           const pairs: [string, string][] = Object.entries(row).map(([k, v]) => [k, String(v ?? "")]);
           setForm(mapPairsToJob(pairs));
           setEditJob(null);
           setSelectedDepts([]);
           setOpen(true);
-          toast.info(`Form pre-filled from "${savedFile.file_name}"`);
+          toast.info(`Form pre-filled from "${ownFile.file_name}"`);
         }
       }
     }
@@ -136,6 +141,7 @@ function CustomerJobsPage() {
     setEditJob(null);
     setForm(emptyJob);
     setSelectedDepts([]);
+    setAssignedEmployeeId("");
     setOpen(true);
   }
 
@@ -153,6 +159,7 @@ function CustomerJobsPage() {
     });
     const linked = jobDepts.filter((jd) => jd.job_id === job.id).map((jd) => jd.department_id);
     setSelectedDepts(linked);
+    setAssignedEmployeeId(job.assigned_employee_id ?? "");
     setOpen(true);
   }
 
@@ -169,6 +176,7 @@ function CustomerJobsPage() {
           requested_services: form.requested_services || null,
           expected_delivery_date: form.expected_delivery_date || null,
           notes: form.notes || null,
+          assigned_employee_id: assignedEmployeeId || null,
         });
         toast.success("Job updated");
       } else {
@@ -183,6 +191,7 @@ function CustomerJobsPage() {
             requested_services: form.requested_services || null,
             expected_delivery_date: form.expected_delivery_date || null,
             notes: form.notes || null,
+            assigned_employee_id: assignedEmployeeId || null,
             status: "submitted",
           },
           selectedDepts,
@@ -193,6 +202,16 @@ function CustomerJobsPage() {
           await broadcast({
             departmentId: deptId,
             title: "New customer job received",
+            body: `${form.project_title} from ${form.customer_name}`,
+            actorId: user.uid,
+            type: "job",
+          });
+        }
+
+        if (assignedEmployeeId) {
+          await broadcast({
+            userId: assignedEmployeeId,
+            title: "Customer job assigned to you",
             body: `${form.project_title} from ${form.customer_name}`,
             actorId: user.uid,
             type: "job",
@@ -300,24 +319,24 @@ function CustomerJobsPage() {
             <div className="rounded-xl border border-dashed p-4 space-y-3">
               <p className="text-muted-foreground text-sm text-center">Auto-fill the form from a file</p>
               <div className="flex flex-wrap gap-2 justify-center">
-                {savedFile && (
+                {ownFile && (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const row = savedFile.rows[0];
+                      const row = ownFile.rows[0];
                       if (row) {
                         const pairs: [string, string][] = Object.entries(row).map(([k, v]) => [k, String(v ?? "")]);
                         setForm(mapPairsToJob(pairs));
-                        toast.success(`Pre-filled from "${savedFile.file_name}"`);
+                        toast.success(`Pre-filled from "${ownFile.file_name}"`);
                       } else {
                         toast.error("Saved file has no rows");
                       }
                     }}
                   >
                     <FileSpreadsheet className="size-4" />
-                    Use saved file ({savedFile.file_name})
+                    Use saved file ({ownFile.file_name})
                   </Button>
                 )}
                 <label className="cursor-pointer">
@@ -334,7 +353,7 @@ function CustomerJobsPage() {
                     onChange={(e) => handleFileUpload(e.target.files)}
                   />
                 </label>
-                {!savedFile && (
+                {!ownFile && (
                   <Link to="/file-workspace" search={{ fromJob: undefined }}>
                     <Button type="button" variant="ghost" size="sm">
                       <ExternalLink className="size-4" /> Open File Workspace
@@ -411,25 +430,45 @@ function CustomerJobsPage() {
             </div>
           </div>
 
-          {!editJob && (
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Assign to departments</Label>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {departments.map((d) => (
-                  <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded-lg border p-2.5">
-                    <Checkbox
-                      checked={selectedDepts.includes(d.id)}
-                      onCheckedChange={() => toggleDept(d.id)}
-                    />
-                    <span className="text-sm">{d.name}</span>
-                    {selectedDepts.includes(d.id) && (
-                      <CheckCircle2 className="text-success ml-auto size-4" />
-                    )}
-                  </label>
-                ))}
-              </div>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Assign to departments</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {departments.map((d) => (
+                <label key={d.id} className="flex cursor-pointer items-center gap-2 rounded-lg border p-2.5">
+                  <Checkbox
+                    checked={selectedDepts.includes(d.id)}
+                    onCheckedChange={() => toggleDept(d.id)}
+                  />
+                  <span className="text-sm">{d.name}</span>
+                  {selectedDepts.includes(d.id) && (
+                    <CheckCircle2 className="text-success ml-auto size-4" />
+                  )}
+                </label>
+              ))}
             </div>
-          )}
+          </div>
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Assign to specific employee (optional — if HOD is not available)</Label>
+            <Select value={assignedEmployeeId} onValueChange={setAssignedEmployeeId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select employee in department..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">None (Department Head)</SelectItem>
+                {allProfiles.map((p) => {
+                  const dept = departments.find((d) => d.id === p.department_id);
+                  const userRole = roles.find((r) => r.user_id === p.id)?.role ?? "employee";
+                  const rankText = p.job_title ? p.job_title : userRole === "super_admin" ? "Super Admin" : userRole === "admin" ? "Dept Head / Admin" : "Employee";
+                  return (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.full_name} ({rankText} — {dept?.name ?? "No Dept"})
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

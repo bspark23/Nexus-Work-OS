@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileText, Plus, Search, SlidersHorizontal, Trash2, Eye } from "lucide-react";
+import { FileText, Plus, Search, SlidersHorizontal, Trash2, Eye, Upload, Paperclip, Download, Link2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -36,9 +36,13 @@ export const Route = createFileRoute("/_authenticated/reports")({
   component: ReportsPage,
 });
 
+const MAX_REPORT_FILE = 900 * 1024; // 900 KB
+
 const empty: Partial<Report> = {
   title: "", report_type: "daily", status: "submitted",
   report_date: new Date().toISOString().slice(0, 10),
+  attached_file: null, attached_file_name: null,
+  report_link: null, report_link_label: null,
 };
 
 function ReportsPage() {
@@ -62,9 +66,30 @@ function ReportsPage() {
   // Dialog
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Partial<Report>>(empty);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Read-only view dialog (for admins reading other people's reports)
   const [viewReport, setViewReport] = useState<Report | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
+
+  async function handleReportFileChange(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    if (file.size > MAX_REPORT_FILE) {
+      toast.error(`File too large (${(file.size / 1024).toFixed(0)} KB). Max 900 KB.`);
+      return;
+    }
+    setUploadingFile(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      setDraft((d) => ({ ...d, attached_file: dataUrl, attached_file_name: file.name }));
+      toast.success(`"${file.name}" attached`);
+      setUploadingFile(false);
+    };
+    reader.onerror = () => { toast.error("Could not read file"); setUploadingFile(false); };
+    reader.readAsDataURL(file);
+  }
 
   const filtered = useMemo(() => {
     return reports.filter((r) => {
@@ -79,9 +104,15 @@ function ReportsPage() {
   }, [reports, search, filterType, filterStatus, filterDept, filterEmployee]);
 
   async function submit() {
-    if (!draft.title || !user) return;
+    if (!user) return;
+    const finalTitle = draft.title?.trim() || (draft.attached_file_name ? `Report: ${draft.attached_file_name}` : "");
+    if (!finalTitle) {
+      toast.error("Please enter a title or attach a report file.");
+      return;
+    }
     const id = await saveReport({
       ...draft,
+      title: finalTitle,
       author_id: draft.author_id ?? user.id,
       department_id: draft.department_id ?? profile?.department_id ?? null,
     });
@@ -244,17 +275,36 @@ function ReportsPage() {
                   </div>
                 )}
 
+                {/* Show attached file if any */}
+                {r.attached_file_name && r.attached_file && (
+                  <a
+                    href={r.attached_file}
+                    download={r.attached_file_name}
+                    className="flex items-center gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-xs hover:bg-secondary transition-colors"
+                  >
+                    <Paperclip className="text-muted-foreground size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate font-medium">{r.attached_file_name}</span>
+                    <Download className="text-muted-foreground size-3.5 shrink-0" />
+                  </a>
+                )}
+
+                {/* Show reference link if any */}
+                {r.report_link && (
+                  <a
+                    href={r.report_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-lg border border-info/30 bg-info/5 px-3 py-2 text-xs hover:bg-info/10 transition-colors text-info group"
+                  >
+                    <Link2 className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {r.report_link_label || r.report_link}
+                    </span>
+                    <ExternalLink className="size-3 shrink-0 opacity-60 group-hover:opacity-100" />
+                  </a>
+                )}
+
                 <div className="flex gap-2 flex-wrap">
-                  {/* Admin/Dept Admin: read full report */}
-                  {canReadFull && !isOwner && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => { setViewReport(r); setViewOpen(true); }}
-                    >
-                      <Eye className="size-4" /> Read report
-                    </Button>
-                  )}
                   {/* Owner: edit own report */}
                   {isOwner && (
                     <Button
@@ -265,14 +315,14 @@ function ReportsPage() {
                       Open / Edit
                     </Button>
                   )}
-                  {/* Super admin can also read own reports */}
-                  {isAdmin && isOwner && (
+                  {/* Anyone who can read the full report gets a Preview button */}
+                  {canReadFull && (
                     <Button
                       size="sm"
-                      variant="ghost"
+                      variant={isOwner ? "ghost" : "outline"}
                       onClick={() => { setViewReport(r); setViewOpen(true); }}
                     >
-                      <Eye className="size-4" /> Preview
+                      <Eye className="size-4" /> {isOwner ? "Preview" : "Read report"}
                     </Button>
                   )}
                 </div>
@@ -326,10 +376,81 @@ function ReportsPage() {
               <Label>Next steps</Label>
               <Textarea rows={2} value={draft.next_steps ?? ""} onChange={(e) => setDraft({ ...draft, next_steps: e.target.value })} />
             </div>
+
+            {/* Link section */}
+            <div className="rounded-xl border border-info/20 bg-info/5 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="size-4 text-info shrink-0" />
+                <p className="text-sm font-medium">Reference Link <span className="text-muted-foreground font-normal text-xs">(optional)</span></p>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Add a link to your work — Google Drive, GitHub, Figma, Notion, YouTube, etc.
+                Admins can click it to go directly to your deliverable.
+              </p>
+              <div className="space-y-2">
+                <Label>Link URL</Label>
+                <Input
+                  type="url"
+                  value={draft.report_link ?? ""}
+                  onChange={(e) => setDraft({ ...draft, report_link: e.target.value || null })}
+                  placeholder="https://drive.google.com/…  or  https://github.com/…"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Link label <span className="text-muted-foreground font-normal text-xs">(what to show — leave blank to show the URL)</span></Label>
+                <Input
+                  value={draft.report_link_label ?? ""}
+                  onChange={(e) => setDraft({ ...draft, report_link_label: e.target.value || null })}
+                  placeholder="e.g. View my design on Figma"
+                />
+              </div>
+            </div>
+
+            {/* File attachment — optional */}
+            <div className="space-y-2">
+              <Label>
+                Attach file <span className="text-muted-foreground font-normal text-xs">(optional — PDF, Word, Excel, CSV, image, max 900 KB)</span>
+              </Label>
+              {draft.attached_file_name ? (
+                <div className="flex items-center gap-3 rounded-xl border bg-secondary/40 px-3 py-2.5">
+                  <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{draft.attached_file_name}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-destructive"
+                    onClick={() => setDraft({ ...draft, attached_file: null, attached_file_name: null })}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingFile}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="size-4" />
+                    {uploadingFile ? "Reading…" : "Upload file"}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    hidden
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.png,.jpg,.jpeg,.webp"
+                    onChange={(e) => handleReportFileChange(e.target.files)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submit} disabled={!draft.title}>Submit report</Button>
+            <Button onClick={submit} disabled={!draft.title && !draft.attached_file}>Submit report</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -381,6 +502,44 @@ function ReportsPage() {
                 )}
                 {!viewReport.summary && !viewReport.completed_work && !viewReport.challenges && !viewReport.achievements && !viewReport.next_steps && (
                   <p className="text-muted-foreground italic text-sm">No details were added to this report.</p>
+                )}
+
+                {/* Reference link */}
+                {viewReport.report_link && (
+                  <section>
+                    <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-2">Reference Link</p>
+                    <a
+                      href={viewReport.report_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-info/30 bg-info/5 px-4 py-2.5 text-sm text-info hover:bg-info/10 transition-colors group font-medium"
+                    >
+                      <Link2 className="size-4 shrink-0" />
+                      <span className="truncate max-w-xs">
+                        {viewReport.report_link_label || viewReport.report_link}
+                      </span>
+                      <ExternalLink className="size-3.5 shrink-0 opacity-60 group-hover:opacity-100" />
+                    </a>
+                    {viewReport.report_link_label && (
+                      <p className="text-muted-foreground text-xs mt-1 ml-1 truncate">{viewReport.report_link}</p>
+                    )}
+                  </section>
+                )}
+
+                {/* Attached file */}
+                {viewReport.attached_file_name && viewReport.attached_file && (
+                  <section>
+                    <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-2">Attached File</p>
+                    <a
+                      href={viewReport.attached_file}
+                      download={viewReport.attached_file_name}
+                      className="inline-flex items-center gap-2 rounded-lg border bg-secondary/40 px-4 py-2.5 text-sm hover:bg-secondary transition-colors"
+                    >
+                      <Paperclip className="text-muted-foreground size-4 shrink-0" />
+                      <span className="truncate max-w-xs font-medium">{viewReport.attached_file_name}</span>
+                      <Download className="text-muted-foreground size-3.5 shrink-0" />
+                    </a>
+                  </section>
                 )}
               </div>
 

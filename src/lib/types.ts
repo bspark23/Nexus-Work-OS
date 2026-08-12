@@ -86,6 +86,13 @@ export type Report = {
   next_steps: string | null;
   report_date: string;
   status: string;
+  /** Optional link to an external resource (Google Drive, GitHub, Figma, etc.) */
+  report_link: string | null;
+  /** Optional link label shown instead of the raw URL */
+  report_link_label: string | null;
+  /** Optional uploaded file stored as base64 data URL */
+  attached_file: string | null;
+  attached_file_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -143,6 +150,7 @@ export type CustomerJob = {
   expected_delivery_date: string | null;
   notes: string | null;
   source_file_name: string | null;
+  assigned_employee_id: string | null;
   status: string;
   created_at: string;
   updated_at: string;

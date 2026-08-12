@@ -27,7 +27,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
+import { useScope } from "@/hooks/useScope";
 import { useProjects, useProfiles, useDepartments } from "@/hooks/useData";
+import { scopeProjects } from "@/lib/scope";
 import { deleteProject, saveProject, track } from "@/lib/api";
 import { PRIORITIES, PROJECT_STATUSES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
@@ -55,8 +57,9 @@ const empty: Partial<Project> = {
 };
 
 function ProjectsPage() {
-  const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
-  const { data: projects = [] } = useProjects();
+  const { user, profile, isAdmin, isDeptAdmin, canManage, departmentId } = useAuth();
+  const scope = useScope();
+  const { data: allProjects = [] } = useProjects();
   const { data: allProfiles = [] } = useProfiles(canManage);
   const { data: departments = [] } = useDepartments();
   const qc = useQueryClient();
@@ -64,6 +67,8 @@ function ProjectsPage() {
   const [filter, setFilter] = useState("all");
   const [draft, setDraft] = useState<Partial<Project>>(empty);
 
+  // Scope projects: super admin sees all, dept admin sees dept, employees see only their own
+  const projects = scopeProjects(allProjects, scope);
   const visible = projects.filter((p) => filter === "all" || p.status === filter);
 
   async function submit() {
