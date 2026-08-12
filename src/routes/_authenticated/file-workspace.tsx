@@ -1,8 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
-  FileSpreadsheet, Upload, Trash2, Plus, Save, Loader2,
-  FileText, Download, Table2, Users, User, Send,
+  FileSpreadsheet,
+  Upload,
+  Trash2,
+  Plus,
+  Save,
+  Loader2,
+  FileText,
+  Download,
+  Table2,
+  Users,
+  User,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -15,8 +25,11 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { useAuth } from "@/hooks/useAuth";
 import { useMyDepartment, useSavedFile, useAllSavedFiles, useProfiles } from "@/hooks/useData";
 import {
-  upsertSavedFile, updateSavedFileRows, deleteSavedFile,
-  type SavedFile, type SavedFileRow,
+  upsertSavedFile,
+  updateSavedFileRows,
+  deleteSavedFile,
+  type SavedFile,
+  type SavedFileRow,
 } from "@/lib/jobs-api";
 import { parseJobFile } from "@/lib/job-parse";
 import { saveTask, logActivity } from "@/lib/api";
@@ -24,10 +37,18 @@ import { broadcast } from "@/lib/notify";
 import { SalesIndividualTracker, type TrackerRow } from "@/components/sales/SalesIndividualTracker";
 import { UserPicker } from "@/components/common/UserPicker";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 
 export const Route = createFileRoute("/_authenticated/file-workspace")({
@@ -44,27 +65,20 @@ function FileWorkspacePage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  // ── data ──────────────────────────────────────────────────────────────────
-  const { data: allFiles = [], isLoading } = useAllSavedFiles(true);
-  const { data: allProfiles = [] } = useProfiles(true);
-
   // ── view state ────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<"workspace" | "tracker">("tracker");
+
+  // ── data ──────────────────────────────────────────────────────────────────
+  // Only load files when in workspace mode to improve performance
+  const { data: allFiles = [], isLoading } = useAllSavedFiles(viewMode === "workspace");
+  // Only load profiles in tracker mode (workspace: only owner_name strings are shown, not full profiles)
+  const needProfiles = viewMode === "tracker";
+  const { data: allProfiles = [] } = useProfiles(needProfiles);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editRows, setEditRows] = useState<SavedFileRow[] | null>(null);
   const [dirty, setDirty] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-
-  // Task assignment dialog state
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignRow, setAssignRow] = useState<{ row: TrackerRow; sheetName: string } | null>(null);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [taskDeadline, setTaskDeadline] = useState("");
-  const [taskPriority, setTaskPriority] = useState("medium");
-  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
   const canAccess = isAdmin || isDeptAdmin || isSales;
@@ -82,8 +96,53 @@ function FileWorkspacePage() {
   const isPdf = activeFileData?.file_type === "pdf";
   const isOwner = activeFileData?.owner_id === user?.id;
 
+  // ── File workspace performance: click-to-edit + virtualize ────────────────
+  const [fwEditingCell, setFwEditingCell] = useState<{ row: number; col: string } | null>(null);
+  const fwEditInputRef = useRef<HTMLInputElement>(null);
+  const FW_ROW_H = 36;
+  const FW_VIRT_THRESHOLD = 150;
+  const fwScrollRef = useRef<HTMLDivElement>(null);
+  const [fwScrollTop, setFwScrollTop] = useState(0);
+  const useFwVirtual = displayRows.length > FW_VIRT_THRESHOLD;
+
+  const { fwStart, fwEnd } = useMemo(() => {
+    if (!useFwVirtual) return { fwStart: 0, fwEnd: displayRows.length };
+    const viewH = fwScrollRef.current?.clientHeight ?? 500;
+    const start = Math.max(0, Math.floor(fwScrollTop / FW_ROW_H) - 10);
+    const end = Math.min(displayRows.length, Math.ceil((fwScrollTop + viewH) / FW_ROW_H) + 10);
+    return { fwStart: start, fwEnd: end };
+  }, [fwScrollTop, displayRows.length, useFwVirtual]);
+
+  useEffect(() => {
+    if (fwEditingCell && fwEditInputRef.current) {
+      fwEditInputRef.current.focus();
+      fwEditInputRef.current.select();
+    }
+  }, [fwEditingCell]);
+
+  function fwStartEdit(row: number, col: string) {
+    if (!isOwner) return;
+    setFwEditingCell({ row, col });
+  }
+
+  function fwCommitEdit(col: string, value: string) {
+    if (!fwEditingCell) return;
+    editCell(fwEditingCell.row, col, value);
+    setFwEditingCell(null);
+  }
+
+  // Task assignment dialog state
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignRow, setAssignRow] = useState<{ row: TrackerRow; sheetName: string } | null>(null);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDesc, setTaskDesc] = useState("");
+  const [taskDeadline, setTaskDeadline] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
   // ── loading / access guards ───────────────────────────────────────────────
-  if (isLoading) {
+  if (isLoading && viewMode === "workspace") {
     return (
       <div className="flex h-60 items-center justify-center">
         <Loader2 className="text-muted-foreground size-6 animate-spin" />
@@ -206,7 +265,11 @@ function FileWorkspacePage() {
     if (rows.length > 0) {
       sessionStorage.setItem(
         "prefill_job_file",
-        JSON.stringify({ file_name: activeFileData.file_name, rows, columns: activeFileData.columns }),
+        JSON.stringify({
+          file_name: activeFileData.file_name,
+          rows,
+          columns: activeFileData.columns,
+        }),
       );
       navigate({ to: "/customer-jobs", search: { fromFile: "1", fileId: undefined } });
     } else {
@@ -216,32 +279,42 @@ function FileWorkspacePage() {
 
   function openAssignTask(row: TrackerRow, _idx: number, sheetName: string) {
     setAssignRow({ row, sheetName });
-    
+
     // Generate a smart task title from available data
-    const possibleTitleFields = ['services', 'service', 'task', 'title', 'description', 'company_customer', 'customer', 'client', 'project'];
-    const possibleClientFields = ['company_customer', 'customer', 'client', 'company', 'business'];
-    
+    const possibleTitleFields = [
+      "services",
+      "service",
+      "task",
+      "title",
+      "description",
+      "company_customer",
+      "customer",
+      "client",
+      "project",
+    ];
+    const possibleClientFields = ["company_customer", "customer", "client", "company", "business"];
+
     let taskTitle = "";
     let clientName = "";
-    
+
     // Find the best title field
     for (const field of possibleTitleFields) {
-      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      const value = Object.keys(row).find((k) => k.toLowerCase().includes(field.toLowerCase()));
       if (value && row[value]) {
         taskTitle = String(row[value]).trim();
         break;
       }
     }
-    
+
     // Find client/customer name
     for (const field of possibleClientFields) {
-      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      const value = Object.keys(row).find((k) => k.toLowerCase().includes(field.toLowerCase()));
       if (value && row[value]) {
         clientName = String(row[value]).trim();
         break;
       }
     }
-    
+
     // Create a meaningful title and description
     if (taskTitle && clientName) {
       setTaskTitle(`${taskTitle} — ${clientName}`);
@@ -252,22 +325,28 @@ function FileWorkspacePage() {
     } else {
       setTaskTitle(`Task from ${sheetName}`);
     }
-    
+
     // Build description from all available data
     const descLines: string[] = [];
     Object.entries(row).forEach(([key, value]) => {
-      if (key !== '__assigned_to_id' && value && String(value).trim()) {
-        const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      if (key !== "__assigned_to_id" && value && String(value).trim()) {
+        const cleanKey = key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
         descLines.push(`${cleanKey}: ${value}`);
       }
     });
-    setTaskDesc(descLines.join('\n'));
-    
+    setTaskDesc(descLines.join("\n"));
+
     // Try to find a deadline field
-    const deadlineFields = ['delivery_date', 'due_date', 'deadline', 'completion_date', 'target_date'];
+    const deadlineFields = [
+      "delivery_date",
+      "due_date",
+      "deadline",
+      "completion_date",
+      "target_date",
+    ];
     let deadline = "";
     for (const field of deadlineFields) {
-      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      const value = Object.keys(row).find((k) => k.toLowerCase().includes(field.toLowerCase()));
       if (value && row[value]) {
         deadline = String(row[value]).trim();
         break;
@@ -275,23 +354,23 @@ function FileWorkspacePage() {
     }
     setTaskDeadline(deadline);
     setTaskPriority("medium");
-    
+
     // Pre-select the assignee if one was chosen in the table
     setTaskAssigneeId(row.__assigned_to_id || null);
-    
+
     setAssignOpen(true);
   }
 
   async function submitAssignTask() {
     if (!assignRow || !user || !taskAssigneeId) return;
     const { sheetName } = assignRow;
-    
+
     const emp = allProfiles.find((p) => p.id === taskAssigneeId);
     if (!emp) {
       toast.error("Please select an employee to assign this task to");
       return;
     }
-    
+
     setAssigning(true);
     try {
       const title = taskTitle || `Task from ${sheetName}`;
@@ -367,7 +446,11 @@ function FileWorkspacePage() {
                   <>
                     {!isPdf && isOwner && dirty && (
                       <Button onClick={saveEdits} disabled={saving} size="sm">
-                        {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                        {saving ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Save className="size-4" />
+                        )}
                         Save
                       </Button>
                     )}
@@ -384,7 +467,11 @@ function FileWorkspacePage() {
                 <label className="cursor-pointer">
                   <Button variant="outline" size="sm" disabled={uploading} asChild>
                     <span>
-                      {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                      {uploading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Upload className="size-4" />
+                      )}
                       Upload new file
                     </span>
                   </Button>
@@ -404,12 +491,13 @@ function FileWorkspacePage() {
       {/* ── Sales Tracker tab ── */}
       {viewMode === "tracker" ? (
         <div className="space-y-4">
-      <SalesIndividualTracker
-        readOnly={false}
-        allEmployees={allProfiles}
-        onAssignTask={openAssignTask}
-        userId={user?.id}
-      />
+          <SalesIndividualTracker
+            readOnly={false}
+            allEmployees={allProfiles}
+            onAssignTask={openAssignTask}
+            userId={user?.id ?? ""}
+            enabled={viewMode === "tracker"}
+          />
         </div>
       ) : (
         /* ── Custom File Workspace tab ── */
@@ -424,7 +512,9 @@ function FileWorkspacePage() {
               </div>
               <div className="divide-y max-h-[300px] overflow-y-auto">
                 {myFiles.length === 0 ? (
-                  <p className="text-muted-foreground px-4 py-6 text-center text-xs">No files uploaded yet</p>
+                  <p className="text-muted-foreground px-4 py-6 text-center text-xs">
+                    No files uploaded yet
+                  </p>
                 ) : (
                   myFiles.map((f) => (
                     <div
@@ -447,7 +537,10 @@ function FileWorkspacePage() {
                         variant="ghost"
                         size="icon"
                         className="size-6 shrink-0"
-                        onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(f);
+                        }}
                       >
                         <Trash2 className="text-destructive size-3" />
                       </Button>
@@ -462,11 +555,15 @@ function FileWorkspacePage() {
                 <div className="border-b px-4 py-3 flex items-center gap-2">
                   <Users className="text-muted-foreground size-4" />
                   <p className="text-sm font-semibold">All Team Files</p>
-                  <span className="text-muted-foreground text-xs ml-auto">{sharedFiles.length}</span>
+                  <span className="text-muted-foreground text-xs ml-auto">
+                    {sharedFiles.length}
+                  </span>
                 </div>
                 <div className="divide-y max-h-[400px] overflow-y-auto">
                   {sharedFiles.length === 0 ? (
-                    <p className="text-muted-foreground px-4 py-6 text-center text-xs">No files from team yet</p>
+                    <p className="text-muted-foreground px-4 py-6 text-center text-xs">
+                      No files from team yet
+                    </p>
                   ) : (
                     sharedFiles.map((f) => (
                       <div
@@ -481,14 +578,19 @@ function FileWorkspacePage() {
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium">{f.file_name}</p>
-                          <p className="text-muted-foreground text-[11px]">{f.owner_name || "Unknown"}</p>
+                          <p className="text-muted-foreground text-[11px]">
+                            {f.owner_name || "Unknown"}
+                          </p>
                         </div>
                         {(isAdmin || f.owner_id === user?.id) && (
                           <Button
                             variant="ghost"
                             size="icon"
                             className="size-6 shrink-0"
-                            onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(f);
+                            }}
                           >
                             <Trash2 className="text-destructive size-3" />
                           </Button>
@@ -512,7 +614,11 @@ function FileWorkspacePage() {
                   <label className="cursor-pointer">
                     <Button disabled={uploading} asChild>
                       <span>
-                        {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                        {uploading ? (
+                          <Loader2 className="size-4 animate-spin" />
+                        ) : (
+                          <Upload className="size-4" />
+                        )}
                         Upload file
                       </span>
                     </Button>
@@ -536,13 +642,18 @@ function FileWorkspacePage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-sm">{activeFileData.file_name}</p>
                     <p className="text-muted-foreground text-xs">
-                      {isPdf ? "PDF — read only" : `${displayRows.length} rows · ${columns.length} cols`}
+                      {isPdf
+                        ? "PDF — read only"
+                        : `${displayRows.length} rows · ${columns.length} cols`}
                       {" · "}Uploaded by {activeFileData.owner_name || "you"}
-                      {" · "}{new Date(activeFileData.updated_at).toLocaleDateString()}
+                      {" · "}
+                      {new Date(activeFileData.updated_at).toLocaleDateString()}
                       {!isOwner && <span className="text-info ml-2">· Read-only (view only)</span>}
                     </p>
                   </div>
-                  {dirty && isOwner && <span className="text-warning text-xs font-medium">● Unsaved</span>}
+                  {dirty && isOwner && (
+                    <span className="text-warning text-xs font-medium">● Unsaved</span>
+                  )}
                 </div>
 
                 {isPdf && (
@@ -556,53 +667,138 @@ function FileWorkspacePage() {
 
                 {!isPdf && (
                   <div className="surface-card overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
+                    <div
+                      ref={fwScrollRef}
+                      onScroll={(e) => setFwScrollTop((e.target as HTMLDivElement).scrollTop)}
+                      className="overflow-auto max-h-[550px]"
+                    >
+                      <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
                         <thead>
-                          <tr className="border-b bg-secondary/40">
-                            <th className="text-muted-foreground w-10 px-3 py-2.5 text-left text-xs">#</th>
+                          <tr className="border-b bg-secondary/40 sticky top-0 z-10">
+                            <th className="text-muted-foreground w-10 px-3 py-2.5 text-left text-xs">
+                              #
+                            </th>
                             {columns.map((col) => (
-                              <th key={col} className="px-3 py-2.5 text-left text-xs font-semibold whitespace-nowrap">
+                              <th
+                                key={col}
+                                className="px-3 py-2.5 text-left text-xs font-semibold whitespace-nowrap"
+                                style={{ minWidth: 120 }}
+                              >
                                 {col}
                               </th>
                             ))}
-                            {isOwner && <th className="w-10 px-3 py-2.5" />}
+                            {isOwner && <th className="w-12 px-3 py-2.5" />}
                           </tr>
                         </thead>
                         <tbody>
-                          {displayRows.map((row, rowIdx) => (
-                            <tr key={rowIdx} className="border-b hover:bg-secondary/30 group">
-                              <td className="text-muted-foreground px-3 py-1.5 text-xs">{rowIdx + 1}</td>
-                              {columns.map((col) => (
-                                <td key={col} className="px-1.5 py-1">
-                                  {isOwner ? (
-                                    <Input
-                                      value={row[col] ?? ""}
-                                      onChange={(e) => editCell(rowIdx, col, e.target.value)}
-                                      className="h-8 min-w-[120px] border-transparent bg-transparent px-2 text-xs hover:border-border focus:border-border focus:bg-background"
-                                    />
-                                  ) : (
-                                    <span className="px-2 text-xs">{row[col] ?? ""}</span>
-                                  )}
-                                </td>
-                              ))}
-                              {isOwner && (
-                                <td className="px-2 py-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-7 opacity-0 group-hover:opacity-100"
-                                    onClick={() => deleteRow(rowIdx)}
-                                  >
-                                    <Trash2 className="text-destructive size-3.5" />
-                                  </Button>
-                                </td>
-                              )}
+                          {useFwVirtual && fwStart > 0 && (
+                            <tr>
+                              <td
+                                colSpan={columns.length + (isOwner ? 2 : 1)}
+                                style={{ height: fwStart * FW_ROW_H, padding: 0, border: 0 }}
+                              />
                             </tr>
-                          ))}
+                          )}
+
+                          {displayRows.slice(fwStart, fwEnd).map((row, sliceIdx) => {
+                            const rowIdx = fwStart + sliceIdx;
+                            return (
+                              <tr
+                                key={rowIdx}
+                                className="border-b hover:bg-secondary/30 group"
+                                style={useFwVirtual ? { height: FW_ROW_H } : undefined}
+                              >
+                                <td className="text-muted-foreground px-3 py-1.5 text-xs">
+                                  {rowIdx + 1}
+                                </td>
+                                {columns.map((col) => {
+                                  const cellEditing =
+                                    fwEditingCell?.row === rowIdx && fwEditingCell?.col === col;
+                                  const cellVal = row[col] ?? "";
+                                  return (
+                                    <td
+                                      key={col}
+                                      className="px-1.5 py-1"
+                                      onClick={() => isOwner && fwStartEdit(rowIdx, col)}
+                                    >
+                                      {!isOwner ? (
+                                        <span className="px-2 text-xs block py-1 truncate">
+                                          {cellVal}
+                                        </span>
+                                      ) : cellEditing ? (
+                                        <Input
+                                          ref={fwEditInputRef}
+                                          value={cellVal}
+                                          onChange={(e) => editCell(rowIdx, col, e.target.value)}
+                                          onBlur={(e) => fwCommitEdit(col, e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                              e.preventDefault();
+                                              fwCommitEdit(
+                                                col,
+                                                (e.target as HTMLInputElement).value,
+                                              );
+                                            } else if (e.key === "Escape") {
+                                              setFwEditingCell(null);
+                                            }
+                                          }}
+                                          className="h-8 min-w-[120px] border bg-background px-2 text-xs focus:border-primary"
+                                        />
+                                      ) : (
+                                        <span
+                                          className={`px-2 text-xs block py-1 truncate min-h-[32px] flex items-center cursor-text ${
+                                            cellVal ? "" : "text-muted-foreground/40"
+                                          }`}
+                                        >
+                                          {cellVal || " "}
+                                        </span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                                {isOwner && (
+                                  <td className="px-2 py-1" onClick={(e) => e.stopPropagation()}>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-7 opacity-0 group-hover:opacity-100"
+                                      onClick={() => deleteRow(rowIdx)}
+                                    >
+                                      <Trash2 className="text-destructive size-3.5" />
+                                    </Button>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })}
+
+                          {useFwVirtual && fwEnd < displayRows.length && (
+                            <tr>
+                              <td
+                                colSpan={columns.length + (isOwner ? 2 : 1)}
+                                style={{
+                                  height: (displayRows.length - fwEnd) * FW_ROW_H,
+                                  padding: 0,
+                                  border: 0,
+                                }}
+                              />
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
+                    {/* Row count / info footer */}
+                    {displayRows.length > 0 && (
+                      <div className="border-t bg-secondary/20 px-4 py-1.5 text-[10px] text-muted-foreground flex items-center justify-between">
+                        <span>
+                          {displayRows.length} row{displayRows.length !== 1 ? "s" : ""} ·{" "}
+                          {columns.length} col{columns.length !== 1 ? "s" : ""}
+                          {useFwVirtual &&
+                            ` · rendering ${fwEnd - fwStart} visible (virtualized for speed)`}
+                        </span>
+                        {isOwner && <span>Click cell to edit · Enter confirm · Esc cancel</span>}
+                      </div>
+                    )}
                     <div className="flex items-center justify-between border-t px-4 py-3">
                       {isOwner ? (
                         <>
@@ -610,7 +806,11 @@ function FileWorkspacePage() {
                             <Plus className="size-4" /> Add row
                           </Button>
                           <Button size="sm" onClick={saveEdits} disabled={!dirty || saving}>
-                            {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+                            {saving ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Save className="size-4" />
+                            )}
                             Save
                           </Button>
                         </>
@@ -624,7 +824,8 @@ function FileWorkspacePage() {
                 )}
 
                 <p className="text-muted-foreground text-xs px-1">
-                  Click <strong>"Use for new job"</strong> to pre-fill a customer job form with this file's data.
+                  Click <strong>"Use for new job"</strong> to pre-fill a customer job form with this
+                  file's data.
                 </p>
               </div>
             )}
@@ -641,7 +842,7 @@ function FileWorkspacePage() {
               Assign Task
               {taskAssigneeId && (
                 <span className="text-sm font-normal text-muted-foreground ml-1">
-                  to {allProfiles.find(p => p.id === taskAssigneeId)?.full_name}
+                  to {allProfiles.find((p) => p.id === taskAssigneeId)?.full_name}
                 </span>
               )}
             </DialogTitle>
@@ -649,16 +850,22 @@ function FileWorkspacePage() {
           {assignRow && (
             <div className="space-y-4">
               <div className="rounded-lg bg-secondary/50 p-3 text-xs space-y-1">
-                <p><span className="font-medium">Sheet:</span> {assignRow.sheetName}</p>
-                <p><span className="font-medium">Row Data:</span></p>
+                <p>
+                  <span className="font-medium">Sheet:</span> {assignRow.sheetName}
+                </p>
+                <p>
+                  <span className="font-medium">Row Data:</span>
+                </p>
                 <div className="max-h-32 overflow-y-auto text-[10px] space-y-0.5">
                   {Object.entries(assignRow.row)
-                    .filter(([key, value]) => key !== '__assigned_to_id' && value && String(value).trim())
+                    .filter(
+                      ([key, value]) => key !== "__assigned_to_id" && value && String(value).trim(),
+                    )
                     .slice(0, 8)
                     .map(([key, value]) => (
                       <div key={key} className="flex">
                         <span className="font-medium min-w-[60px] truncate">
-                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                          {key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}:
                         </span>
                         <span className="ml-1 truncate">{String(value)}</span>
                       </div>
@@ -686,7 +893,9 @@ function FileWorkspacePage() {
                 <div className="space-y-2">
                   <Label>Priority</Label>
                   <Select value={taskPriority} onValueChange={setTaskPriority}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Low</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
@@ -697,15 +906,28 @@ function FileWorkspacePage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Deadline</Label>
-                  <Input type="date" value={taskDeadline} onChange={(e) => setTaskDeadline(e.target.value)} />
+                  <Input
+                    type="date"
+                    value={taskDeadline}
+                    onChange={(e) => setTaskDeadline(e.target.value)}
+                  />
                 </div>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
-            <Button onClick={submitAssignTask} disabled={assigning || !taskTitle || !taskAssigneeId}>
-              {assigning ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitAssignTask}
+              disabled={assigning || !taskTitle || !taskAssigneeId}
+            >
+              {assigning ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Send className="size-4" />
+              )}
               Assign Task
             </Button>
           </DialogFooter>

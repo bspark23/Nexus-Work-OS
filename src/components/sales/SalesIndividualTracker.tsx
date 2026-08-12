@@ -1,7 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import {
-  FileSpreadsheet, Upload, Download, Plus, Trash2,
-  Send, Loader2, Save, RefreshCw, FileX, X,
+  FileSpreadsheet,
+  Upload,
+  Download,
+  Plus,
+  Trash2,
+  Send,
+  Loader2,
+  Save,
+  RefreshCw,
+  FileX,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,10 +18,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { UserPicker } from "@/components/common/UserPicker";
 import { saveSharedTracker, type TrackerSheetData } from "@/lib/jobs-api";
@@ -37,8 +54,18 @@ export type TrackerSheet = {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const ASSIGN_COL_ALIASES = [
-  "assigned to", "assigned_to", "assignedto", "assigned", "employee",
-  "assignee", "worker", "staff", "person", "user", "member", "team member",
+  "assigned to",
+  "assigned_to",
+  "assignedto",
+  "assigned",
+  "employee",
+  "assignee",
+  "worker",
+  "staff",
+  "person",
+  "user",
+  "member",
+  "team member",
 ];
 
 function isAssignCol(col: string) {
@@ -115,45 +142,154 @@ export function SalesIndividualTracker({
   allEmployees = [],
   onAssignTask,
   userId,
+  enabled = true, // New prop to control data fetching
 }: {
   readOnly?: boolean;
   allEmployees?: Profile[];
   onAssignTask?: (row: TrackerRow, rowIdx: number, sheetName: string) => void;
   userId?: string;
+  enabled?: boolean;
 }) {
   const qc = useQueryClient();
-  const { data: remoteData, isLoading } = useSharedTracker(true);
+  const { data: remoteData, isLoading } = useSharedTracker(enabled); // Only fetch when enabled
 
   const [sheets, setSheets] = useState<TrackerSheet[]>([]);
   const [activeSheetId, setActiveSheetId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Track the last remote timestamp to avoid re-processing the same data
+  const lastRemoteTimestamp = useRef<string>("");
+  // Track sheet IDs that were created locally (not from remote) to preserve them
+  const locallyCreatedIds = useRef<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
   const [newSheetName, setNewSheetName] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [deleteSheetId, setDeleteSheetId] = useState<string | null>(null);
   const [clearTableOpen, setClearTableOpen] = useState(false);
-  
+
   // Dropdown management state
   const [dropdownManageOpen, setDropdownManageOpen] = useState(false);
   const [managingColumn, setManagingColumn] = useState<string>("");
   const [newDropdownOption, setNewDropdownOption] = useState("");
 
-  // Sync remote → local (only when not dirty)
+  // Smart sync: remote → local with merging.
+  // Rules:
+  // 1. Never overwrite sheets that were created/modified locally after initial load
+  // 2. Merge in NEW sheets from remote (added by other team members)
+  // 3. Only process each unique remote snapshot once (tracked by timestamp)
   useEffect(() => {
-    if (!remoteData || dirty) return;
-    if (remoteData.sheets.length > 0) {
-      const merged = mergeSheets(remoteData.sheets);
-      setSheets(merged);
-      setActiveSheetId((prev) => merged.find((s) => s.id === prev) ? prev : merged[0].id);
+    if (!remoteData) return;
+
+    // Skip if we've already processed this exact remote state
+    const thisTs = remoteData.updated_at;
+    if (thisTs && thisTs === lastRemoteTimestamp.current) return;
+
+    const remoteSheets = mergeSheets(remoteData.sheets);
+
+    setSheets((prevSheets) => {
+      // Case 1: No local sheets yet, and no locally created ones — just load remote
+      if (prevSheets.length === 0 && locallyCreatedIds.current.size === 0) {
+        if (remoteSheets.length > 0) {
+          setActiveSheetId((prev) => prev || remoteSheets[0].id);
+        }
+        return remoteSheets;
+      }
+
+      // Case 2: We have local sheets — MERGE, don't overwrite
+      // Build a map of existing sheets by ID for quick lookup
+      const existingById = new Map(prevSheets.map((s) => [s.id, s]));
+      const existingNamesLower = new Set(prevSheets.map((s) => s.name.toLowerCase()));
+
+      const merged = [...prevSheets];
+
+      // Add sheets from remote that we don't have locally yet
+      for (const rs of remoteSheets) {
+        if (existingById.has(rs.id)) {
+          // Already have this sheet — skip to preserve local edits
+          continue;
+        }
+        // New sheet from remote (e.g., added by teammate)
+        // Rename if name collision with a locally created sheet
+        let finalName = rs.name;
+        let counter = 1;
+        while (existingNamesLower.has(finalName.toLowerCase())) {
+          finalName = `${rs.name} (${counter++})`;
+        }
+        existingNamesLower.add(finalName.toLowerCase());
+        merged.push({ ...rs, name: finalName });
+      }
+
+      return merged;
+    });
+
+    // If no active sheet is selected and we have sheets, pick the first
+    setActiveSheetId((prev) => {
+      if (prev) return prev;
+      return remoteSheets[0]?.id ?? "";
+    });
+
+    // Remember that we processed this remote state
+    if (thisTs) {
+      lastRemoteTimestamp.current = thisTs;
     }
-  }, [remoteData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [remoteData]);
 
   const activeSheet = sheets.find((s) => s.id === activeSheetId);
   const activeRows = activeSheet?.rows ?? [];
   const activeCols = activeSheet?.columns ?? [];
+
+  // ── Performance: click-to-edit state ────────────────────────────────
+  // Only render an Input when a cell is actively being edited.
+  // All other cells show plain text — this cuts rendered components by 90%+.
+  const [editingCell, setEditingCell] = useState<{ rowIdx: number; col: string } | null>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Performance: virtualization ─────────────────────────────────────
+  // Only render rows that are visible in the scroll container.
+  // Big files (1000+ rows) would otherwise cause 10000+ React nodes to mount.
+  const ROW_HEIGHT = 32;
+  const OVERSCAN_ROWS = 12;
+  const VIRTUALIZE_THRESHOLD = 120;
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const useVirtualization = activeRows.length > VIRTUALIZE_THRESHOLD;
+
+  const { visibleStart, visibleEnd } = useMemo((): { visibleStart: number; visibleEnd: number } => {
+    if (!useVirtualization) return { visibleStart: 0, visibleEnd: activeRows.length };
+    const viewportH = tableScrollRef.current?.clientHeight ?? 600;
+    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN_ROWS);
+    const end = Math.min(
+      activeRows.length,
+      Math.ceil((scrollTop + viewportH) / ROW_HEIGHT) + OVERSCAN_ROWS,
+    );
+    return { visibleStart: start, visibleEnd: end };
+  }, [scrollTop, activeRows.length, useVirtualization]);
+
+  function onTableScroll(e: React.UIEvent<HTMLDivElement>) {
+    if (!useVirtualization) return;
+    setScrollTop((e.target as HTMLDivElement).scrollTop);
+  }
+
+  // Focus the input when a cell enters edit mode
+  useEffect(() => {
+    if (editingCell && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.select();
+    }
+  }, [editingCell]);
+
+  function startEdit(rowIdx: number, col: string) {
+    if (readOnly) return;
+    setEditingCell({ rowIdx, col });
+  }
+
+  function commitEdit(col: string, value: string) {
+    if (!editingCell) return;
+    updateCell(editingCell.rowIdx, col, value);
+    setEditingCell(null);
+  }
 
   function colWidth(col: string) {
     return colWidths[`${activeSheetId}:${col}`] ?? Math.max(130, col.length * 9);
@@ -252,7 +388,11 @@ export function SalesIndividualTracker({
       prev.map((s) => {
         if (s.id !== activeSheetId) return s;
         const rows = [...s.rows];
-        rows[rowIdx] = { ...rows[rowIdx], [col]: emp?.full_name ?? "", __assigned_to_id: empId ?? "" };
+        rows[rowIdx] = {
+          ...rows[rowIdx],
+          [col]: emp?.full_name ?? "",
+          __assigned_to_id: empId ?? "",
+        };
         return { ...s, rows };
       }),
     );
@@ -261,9 +401,14 @@ export function SalesIndividualTracker({
 
   function addRow() {
     if (readOnly) return;
-    if (activeCols.length === 0) { toast.error("Import a file first to get columns"); return; }
+    if (activeCols.length === 0) {
+      toast.error("Import a file first to get columns");
+      return;
+    }
     setSheets((prev) =>
-      prev.map((s) => s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s),
+      prev.map((s) =>
+        s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
+      ),
     );
     setDirty(true);
   }
@@ -271,7 +416,9 @@ export function SalesIndividualTracker({
   function deleteRow(idx: number) {
     if (readOnly) return;
     setSheets((prev) =>
-      prev.map((s) => s.id === activeSheetId ? { ...s, rows: s.rows.filter((_, i) => i !== idx) } : s),
+      prev.map((s) =>
+        s.id === activeSheetId ? { ...s, rows: s.rows.filter((_, i) => i !== idx) } : s,
+      ),
     );
     setDirty(true);
   }
@@ -282,6 +429,7 @@ export function SalesIndividualTracker({
     const name = newSheetName.trim().toUpperCase();
     if (!name) return;
     const id = `custom_${Date.now()}`;
+    locallyCreatedIds.current.add(id);
     setSheets((prev) => [...prev, { id, name, columns: [], dropdowns: {}, rows: [] }]);
     setActiveSheetId(id);
     setNewSheetName("");
@@ -296,13 +444,14 @@ export function SalesIndividualTracker({
       if (activeSheetId === deleteSheetId) setActiveSheetId(remaining[0]?.id ?? "");
       return remaining;
     });
+    locallyCreatedIds.current.delete(deleteSheetId);
     setDeleteSheetId(null);
     setDirty(true);
   }
 
   function clearActiveSheet() {
     if (readOnly) return;
-    setSheets((prev) => prev.map((s) => s.id === activeSheetId ? { ...s, rows: [] } : s));
+    setSheets((prev) => prev.map((s) => (s.id === activeSheetId ? { ...s, rows: [] } : s)));
     setClearTableOpen(false);
     setDirty(true);
     toast.success("All rows cleared");
@@ -311,7 +460,10 @@ export function SalesIndividualTracker({
   // ── save ──────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
-    if (!userId) { toast.error("You must be signed in to save"); return; }
+    if (!userId) {
+      toast.error("You must be signed in to save");
+      return;
+    }
     setSaving(true);
     try {
       const payload = sheets.map((s) => ({
@@ -361,27 +513,36 @@ export function SalesIndividualTracker({
             if (validation.type === "list" && validation.formulae && validation.formulae[0]) {
               const formula = validation.formulae[0];
               let options: string[] = [];
-              
+
               // Parse dropdown options from different Excel formats
               if (typeof formula === "string") {
                 // Handle quoted list: "Option1,Option2,Option3"
                 if (formula.startsWith('"') && formula.endsWith('"')) {
-                  options = formula.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
+                  options = formula
+                    .slice(1, -1)
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
                 }
                 // Handle range reference or other formulas
-                else if (formula.includes(',')) {
-                  options = formula.split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
+                else if (formula.includes(",")) {
+                  options = formula
+                    .split(",")
+                    .map((s) => s.trim().replace(/['"]/g, ""))
+                    .filter(Boolean);
                 }
                 // Handle single range reference like "Sheet1!$A$1:$A$10"
-                else if (formula.includes('!') && formula.includes(':')) {
+                else if (formula.includes("!") && formula.includes(":")) {
                   // For now, create some default options - in a real scenario you'd resolve the range
-                  options = ['Option 1', 'Option 2', 'Option 3'];
+                  options = ["Option 1", "Option 2", "Option 3"];
                 }
               }
-              
+
               // Map validation ranges to column names
               if (options.length > 0 && validation.sqref) {
-                const ranges = Array.isArray(validation.sqref) ? validation.sqref : [validation.sqref];
+                const ranges = Array.isArray(validation.sqref)
+                  ? validation.sqref
+                  : [validation.sqref];
                 for (const range of ranges) {
                   // Extract column letter(s) from range like "A2:A100" or "B:B"
                   const colMatch = range.match(/^([A-Z]+)/);
@@ -393,7 +554,7 @@ export function SalesIndividualTracker({
                       colIndex = colIndex * 26 + (colLetter.charCodeAt(i) - 65 + 1);
                     }
                     colIndex -= 1; // Convert to 0-based index
-                    
+
                     // We'll map this to column name after we parse headers
                     sheetDropdowns[`__col_${colIndex}__`] = options;
                   }
@@ -407,12 +568,12 @@ export function SalesIndividualTracker({
         const ref = ws["!ref"];
         if (!ref) {
           // Sheet is completely empty — add it with no data
-          importedSheets.push({ 
-            id: `sheet_${wsName}_${Date.now()}`, 
-            name: wsName, 
-            columns: [], 
+          importedSheets.push({
+            id: `sheet_${wsName}_${Date.now()}`,
+            name: wsName,
+            columns: [],
             dropdowns: {},
-            rows: [] 
+            rows: [],
           });
           continue;
         }
@@ -422,17 +583,17 @@ export function SalesIndividualTracker({
         const raw: any[][] = XLSX.utils.sheet_to_json(ws, {
           header: 1,
           defval: "",
-          blankrows: true,  // keep blank rows — don't skip them
-          raw: false,       // format dates/numbers as strings, just like Excel shows them
+          blankrows: true, // keep blank rows — don't skip them
+          raw: false, // format dates/numbers as strings, just like Excel shows them
         });
 
         if (raw.length === 0) {
-          importedSheets.push({ 
-            id: `sheet_${wsName}_${Date.now()}`, 
-            name: wsName, 
-            columns: [], 
+          importedSheets.push({
+            id: `sheet_${wsName}_${Date.now()}`,
+            name: wsName,
+            columns: [],
             dropdowns: {},
-            rows: [] 
+            rows: [],
           });
           continue;
         }
@@ -441,7 +602,7 @@ export function SalesIndividualTracker({
         // Skip leading empty rows to find the first row that has at least one non-empty cell
         let headerRowIdx = 0;
         for (let i = 0; i < raw.length; i++) {
-          if (raw[i].some((v: any) => String(v ?? "").trim() !== "")) {
+          if (raw[i]?.some((v: any) => String(v ?? "").trim() !== "")) {
             headerRowIdx = i;
             break;
           }
@@ -473,14 +634,16 @@ export function SalesIndividualTracker({
 
         // ── Map dropdowns from column indices to column names ──
         const finalDropdowns: Record<string, string[]> = {};
-        
+
         // First, map Excel data validations
         Object.entries(sheetDropdowns).forEach(([key, options]) => {
-          if (key.startsWith('__col_') && key.endsWith('__')) {
-            const colIndex = parseInt(key.replace('__col_', '').replace('__', ''));
+          if (key.startsWith("__col_") && key.endsWith("__")) {
+            const colIndex = parseInt(key.replace("__col_", "").replace("__", ""));
             if (colIndex < finalHeaders.length) {
               const colName = finalHeaders[colIndex];
-              finalDropdowns[colName] = options;
+              if (colName !== undefined) {
+                finalDropdowns[colName] = options;
+              }
             }
           }
         });
@@ -490,36 +653,62 @@ export function SalesIndividualTracker({
           const lowerCol = colName.toLowerCase();
           if (!finalDropdowns[colName]) {
             // Payment Status dropdowns
-            if (lowerCol.includes('payment') && lowerCol.includes('status')) {
+            if (lowerCol.includes("payment") && lowerCol.includes("status")) {
               finalDropdowns[colName] = [
-                'Payment Made', 'Pending Payment', 'No Payment', 'Partial Payment', 
-                'Refund Requested', 'Refunded', 'Payment Failed'
+                "Payment Made",
+                "Pending Payment",
+                "No Payment",
+                "Partial Payment",
+                "Refund Requested",
+                "Refunded",
+                "Payment Failed",
               ];
             }
             // Delivery Status dropdowns
-            else if (lowerCol.includes('delivery') && lowerCol.includes('status')) {
+            else if (lowerCol.includes("delivery") && lowerCol.includes("status")) {
               finalDropdowns[colName] = [
-                'Delivered', 'Not Delivered', 'In Progress', 'Cancelled', 
-                'On Hold', 'Scheduled', 'Failed Delivery'
+                "Delivered",
+                "Not Delivered",
+                "In Progress",
+                "Cancelled",
+                "On Hold",
+                "Scheduled",
+                "Failed Delivery",
               ];
             }
             // Status columns (generic)
-            else if (lowerCol.includes('status') && !lowerCol.includes('payment') && !lowerCol.includes('delivery')) {
+            else if (
+              lowerCol.includes("status") &&
+              !lowerCol.includes("payment") &&
+              !lowerCol.includes("delivery")
+            ) {
               finalDropdowns[colName] = [
-                'Pending', 'In Progress', 'Completed', 'Cancelled', 'On Hold', 'Failed'
+                "Pending",
+                "In Progress",
+                "Completed",
+                "Cancelled",
+                "On Hold",
+                "Failed",
               ];
             }
             // Service type columns
-            else if (lowerCol.includes('service') && !lowerCol.includes('status')) {
+            else if (lowerCol.includes("service") && !lowerCol.includes("status")) {
               finalDropdowns[colName] = [
-                'T-shirt Production', 'Video Editing', 'Logo Design', 'Website Development',
-                'Social Media Management', 'Graphic Design', 'Brand Guidelines Design',
-                'Marketing', 'Photography', 'Content Creation'
+                "T-shirt Production",
+                "Video Editing",
+                "Logo Design",
+                "Website Development",
+                "Social Media Management",
+                "Graphic Design",
+                "Brand Guidelines Design",
+                "Marketing",
+                "Photography",
+                "Content Creation",
               ];
             }
             // Priority columns
-            else if (lowerCol.includes('priority')) {
-              finalDropdowns[colName] = ['Low', 'Medium', 'High', 'Critical'];
+            else if (lowerCol.includes("priority")) {
+              finalDropdowns[colName] = ["Low", "Medium", "High", "Critical"];
             }
           }
         });
@@ -528,16 +717,17 @@ export function SalesIndividualTracker({
         finalHeaders.forEach((colName, colIndex) => {
           if (!finalDropdowns[colName] && !isAssignCol(colName)) {
             const columnValues = dataRawRows
-              .map(row => String(row?.[colIndex] ?? "").trim())
-              .filter(val => val !== "");
-            
+              .map((row) => String(row?.[colIndex] ?? "").trim())
+              .filter((val) => val !== "");
+
             const uniqueValues = [...new Set(columnValues)];
             const totalValues = columnValues.length;
-            
+
             // If column has limited unique values and good repetition, make it a dropdown
             if (uniqueValues.length >= 2 && uniqueValues.length <= 15 && totalValues >= 3) {
               const repetitionRatio = totalValues / uniqueValues.length;
-              if (repetitionRatio >= 1.5) { // Each value appears at least 1.5 times on average
+              if (repetitionRatio >= 1.5) {
+                // Each value appears at least 1.5 times on average
                 finalDropdowns[colName] = uniqueValues.sort();
               }
             }
@@ -554,10 +744,10 @@ export function SalesIndividualTracker({
           // Look for any column that could be an "assigned to" field
           const assignCol = finalHeaders.find((h) => isAssignCol(h));
           if (assignCol) {
-            const nameInFile = String(row[assignCol] ?? "").trim().toLowerCase();
-            const matched = allEmployees.find(
-              (e) => e.full_name.toLowerCase() === nameInFile,
-            );
+            const nameInFile = String(row[assignCol] ?? "")
+              .trim()
+              .toLowerCase();
+            const matched = allEmployees.find((e) => e.full_name.toLowerCase() === nameInFile);
             row.__assigned_to_id = matched?.id ?? "";
           } else {
             row.__assigned_to_id = "";
@@ -576,29 +766,66 @@ export function SalesIndividualTracker({
 
       if (importedSheets.length === 0) throw new Error("Could not read any sheets from the file");
 
-      // Append newly imported sheets to existing sheets instead of replacing them
+      // Check if the currently active sheet is empty (freshly created, no columns/rows)
+      // If so, import the first sheet INTO it instead of creating a brand new sheet
+      const activeSheetIsEmpty =
+        !!activeSheet && activeCols.length === 0 && activeRows.length === 0;
+
+      // Compute totals BEFORE mutating the importedSheets array below
+      const totalSheetsCount = importedSheets.length;
+      const totalRowsCount = importedSheets.reduce((s, sh) => s + sh.rows.length, 0);
+
+      let firstImportedId = importedSheets[0].id;
+
       setSheets((prev) => {
-        // Build new array preserving existing sheets
+        let updated = [...prev];
         const prevNames = new Set(prev.map((s) => s.name.toLowerCase()));
-        const uniqueImported = importedSheets.map((s) => {
-          // If a sheet with the same name exists, give it a unique name
-          let name = s.name;
-          let counter = 1;
-          while (prevNames.has(name.toLowerCase())) {
-            name = `${s.name} (${counter++})`;
-          }
-          prevNames.add(name.toLowerCase());
-          return { ...s, name };
-        });
-        return [...prev, ...uniqueImported];
+        let remainingImported = importedSheets;
+
+        // If we have an empty active sheet and there's at least one imported sheet,
+        // put the first imported sheet's data into the existing empty sheet.
+        if (activeSheetIsEmpty && remainingImported.length > 0) {
+          const firstSheet = remainingImported[0];
+          updated = updated.map((s) =>
+            s.id === activeSheet.id
+              ? {
+                  ...s,
+                  columns: firstSheet.columns,
+                  dropdowns: firstSheet.dropdowns,
+                  rows: firstSheet.rows,
+                }
+              : s,
+          );
+          firstImportedId = activeSheet.id;
+          // Remove first sheet from the list that gets appended as new sheets
+          remainingImported = remainingImported.slice(1);
+          // The active sheet was already marked locally created on creation; no need to re-add
+        }
+
+        // Append any remaining imported sheets (after the first one was merged, or all if no merge)
+        if (remainingImported.length > 0) {
+          const uniqueImported = remainingImported.map((s) => {
+            let name = s.name;
+            let counter = 1;
+            while (prevNames.has(name.toLowerCase())) {
+              name = `${s.name} (${counter++})`;
+            }
+            prevNames.add(name.toLowerCase());
+            locallyCreatedIds.current.add(s.id);
+            return { ...s, name };
+          });
+          updated = [...updated, ...uniqueImported];
+        }
+
+        return updated;
       });
-      setActiveSheetId(importedSheets[0].id);
+
+      setActiveSheetId(firstImportedId);
       setDirty(true);
       if (fileInputRef.current) fileInputRef.current.value = "";
 
-      const totalRows = importedSheets.reduce((s, sh) => s + sh.rows.length, 0);
       toast.success(
-        `Imported ${importedSheets.length} sheet${importedSheets.length > 1 ? "s" : ""} · ${totalRows} rows — click Save to share`,
+        `Imported ${totalSheetsCount} sheet${totalSheetsCount !== 1 ? "s" : ""} · ${totalRowsCount} rows — click Save to share`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not parse file");
@@ -610,7 +837,10 @@ export function SalesIndividualTracker({
   // ── export ────────────────────────────────────────────────────────────
 
   function exportCsv() {
-    if (!activeSheet || activeCols.length === 0) { toast.error("Nothing to export"); return; }
+    if (!activeSheet || activeCols.length === 0) {
+      toast.error("Nothing to export");
+      return;
+    }
     const lines = [
       activeCols.join(","),
       ...activeRows.map((r) =>
@@ -626,7 +856,10 @@ export function SalesIndividualTracker({
   }
 
   async function exportExcel() {
-    if (!activeSheet || activeCols.length === 0) { toast.error("Nothing to export"); return; }
+    if (!activeSheet || activeCols.length === 0) {
+      toast.error("Nothing to export");
+      return;
+    }
     try {
       const XLSX = await import("xlsx");
       const data = [activeCols, ...activeRows.map((r) => activeCols.map((c) => r[c] ?? ""))];
@@ -647,7 +880,6 @@ export function SalesIndividualTracker({
 
   return (
     <div className="surface-card flex flex-col overflow-hidden rounded-xl border shadow-sm">
-
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-secondary/30 px-5 py-3.5">
         <div className="flex items-center gap-2 flex-wrap">
@@ -666,43 +898,67 @@ export function SalesIndividualTracker({
         <div className="flex flex-wrap items-center gap-2">
           {!readOnly && (
             <>
-              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5"
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5"
                 disabled={importing}
-                onClick={() => fileInputRef.current?.click()}>
-                {importing
-                  ? <Loader2 className="size-3.5 animate-spin" />
-                  : <Upload className="size-3.5" />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {importing ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Upload className="size-3.5" />
+                )}
                 Import Excel/CSV
               </Button>
-              <input ref={fileInputRef} type="file" hidden accept=".xlsx,.xls,.csv"
-                onChange={(e) => handleUpload(e.target.files)} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                hidden
+                accept=".xlsx,.xls,.csv"
+                onChange={(e) => handleUpload(e.target.files)}
+              />
 
               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={addRow}>
                 <Plus className="size-3.5" /> Add Row
               </Button>
 
               {activeRows.length > 0 && (
-                <Button variant="outline" size="sm"
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="h-8 text-xs gap-1.5 text-destructive hover:text-destructive"
-                  onClick={() => setClearTableOpen(true)}>
+                  onClick={() => setClearTableOpen(true)}
+                >
                   <FileX className="size-3.5" /> Clear Table
                 </Button>
               )}
 
-              <Button size="sm" className="h-8 text-xs gap-1.5"
-                onClick={handleSave} disabled={saving || !dirty}
-                variant={dirty ? "default" : "outline"}>
-                {saving
-                  ? <Loader2 className="size-3.5 animate-spin" />
-                  : <Save className="size-3.5" />}
+              <Button
+                size="sm"
+                className="h-8 text-xs gap-1.5"
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                variant={dirty ? "default" : "outline"}
+              >
+                {saving ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Save className="size-3.5" />
+                )}
                 {saving ? "Saving…" : dirty ? "Save Changes" : "Saved"}
               </Button>
             </>
           )}
 
           {readOnly && (
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5"
-              onClick={() => qc.invalidateQueries({ queryKey: ["shared_tracker"] })}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={() => qc.invalidateQueries({ queryKey: ["shared_tracker"] })}
+            >
               <RefreshCw className="size-3.5" /> Refresh
             </Button>
           )}
@@ -724,14 +980,20 @@ export function SalesIndividualTracker({
       )}
 
       {/* ── Table ── */}
-      <div className="max-h-[600px] overflow-auto border-b text-xs">
+      <div
+        ref={tableScrollRef}
+        onScroll={onTableScroll}
+        className="max-h-[600px] overflow-auto border-b text-xs"
+      >
         {activeCols.length === 0 ? (
           /* Empty state — no file imported yet or sheet is empty */
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             {isLoading || importing ? (
               <>
                 <Loader2 className="size-8 animate-spin text-primary" />
-                <p className="text-sm">{importing ? "Parsing your file…" : "Loading shared tracker…"}</p>
+                <p className="text-sm">
+                  {importing ? "Parsing your file…" : "Loading shared tracker…"}
+                </p>
               </>
             ) : (
               <>
@@ -742,8 +1004,12 @@ export function SalesIndividualTracker({
                   column will appear exactly as it is in the file.
                 </p>
                 {!readOnly && (
-                  <Button variant="outline" size="sm" className="gap-1.5 mt-1"
-                    onClick={() => fileInputRef.current?.click()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 mt-1"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <Upload className="size-3.5" /> Import your file
                   </Button>
                 )}
@@ -751,29 +1017,35 @@ export function SalesIndividualTracker({
             )}
           </div>
         ) : (
-          <table className="border-collapse text-left"
-            style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}>
+          <table
+            className="border-collapse text-left"
+            style={{ tableLayout: "fixed", width: "max-content", minWidth: "100%" }}
+          >
             <thead>
               <tr className="bg-secondary/60 text-muted-foreground border-b font-semibold sticky top-0 z-10">
                 {/* Row number */}
-                <th style={{ width: 36, minWidth: 36 }}
-                  className="border-r px-2 py-2 text-center select-none text-[11px]">#</th>
+                <th
+                  style={{ width: 36, minWidth: 36 }}
+                  className="border-r px-2 py-2 text-center select-none text-[11px]"
+                >
+                  #
+                </th>
 
                 {/* Dynamic columns — exactly as the file had them */}
                 {activeCols.map((col) => (
-                  <ResizableTh
-                    key={col}
-                    colKey={col}
-                    width={colWidth(col)}
-                    onResize={setColWidth}
-                  >
+                  <ResizableTh key={col} colKey={col} width={colWidth(col)} onResize={setColWidth}>
                     {col}
                   </ResizableTh>
                 ))}
 
                 {/* Action column */}
                 {!readOnly && (
-                  <ResizableTh colKey="__action" width={colWidth("__action") > 0 ? colWidth("__action") : 160} onResize={setColWidth} className="text-center">
+                  <ResizableTh
+                    colKey="__action"
+                    width={colWidth("__action") > 0 ? colWidth("__action") : 160}
+                    onResize={setColWidth}
+                    className="text-center"
+                  >
                     Action
                   </ResizableTh>
                 )}
@@ -782,156 +1054,278 @@ export function SalesIndividualTracker({
             <tbody className="divide-y">
               {activeRows.length === 0 ? (
                 <tr>
-                  <td colSpan={activeCols.length + 2}
-                    className="py-12 text-center text-muted-foreground italic">
+                  <td
+                    colSpan={activeCols.length + 2}
+                    className="py-12 text-center text-muted-foreground italic"
+                  >
                     No rows yet — click "Add Row" to start entering data.
                   </td>
                 </tr>
               ) : (
-                activeRows.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-secondary/20 transition-colors">
-                    <td style={{ width: 36 }}
-                      className="border-r bg-secondary/10 text-[11px] text-muted-foreground text-center px-1 select-none">
-                      {idx + 1}
-                    </td>
+                <>
+                  {/* Virtualization: top padding spacer */}
+                  {useVirtualization && visibleStart > 0 && (
+                    <tr>
+                      <td
+                        colSpan={activeCols.length + (readOnly ? 1 : 2)}
+                        style={{ height: visibleStart * ROW_HEIGHT, padding: 0, border: 0 }}
+                      />
+                    </tr>
+                  )}
 
-                    {activeCols.map((col) => {
-                      const hasDropdown = activeSheet?.dropdowns?.[col] && activeSheet.dropdowns[col].length > 0;
-                      const dropdownOptions = activeSheet?.dropdowns?.[col] || [];
-                      
-                      return (
-                        <td key={col} style={{ width: colWidth(col) }} className="border-r p-0.5 relative group">
-                          {/* "Assigned to" columns → UserPicker (all employees from all depts) */}
-                          {isAssignCol(col) ? (
-                            readOnly ? (
-                              <span className="px-2 text-xs block py-1">{row[col] || "—"}</span>
-                            ) : (
-                              <UserPicker
-                                people={allEmployees}
-                                value={row.__assigned_to_id || null}
-                                onChange={(empId) => updateAssignedTo(idx, col, empId)}
-                                placeholder="Select employee…"
-                                compact
-                              />
-                            )
-                          ) : hasDropdown && !readOnly ? (
-                            /* Columns with dropdowns → Select component with add option */
-                            <div className="relative">
-                              <Select
-                                value={row[col] || ""}
-                                onValueChange={(value) => {
-                                  if (value === "__add_new__") {
-                                    openDropdownManager(col);
-                                  } else {
-                                    updateCell(idx, col, value);
-                                  }
-                                }}
-                              >
-                                <SelectTrigger className="h-7 text-xs border-0 bg-transparent px-1.5 pr-6">
-                                  <SelectValue placeholder="Select..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {dropdownOptions.map((option, optIdx) => (
-                                    <SelectItem key={optIdx} value={option}>
-                                      {option}
-                                    </SelectItem>
-                                  ))}
-                                  <SelectItem value="__add_new__" className="text-primary font-medium">
-                                    + Add new option
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              {/* Column dropdown management button - only visible on hover */}
-                              <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-5 w-5 p-0 text-xs"
-                                  title={`Manage ${col} dropdown`}
-                                  onClick={() => openDropdownManager(col)}
-                                >
-                                  ⚙
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            /* Regular text input with option to make it a dropdown */
-                            <div className="relative">
-                              <Input
-                                value={row[col] ?? ""}
-                                disabled={readOnly}
-                                onChange={(e) => updateCell(idx, col, e.target.value)}
-                                className={`h-7 text-xs border-0 focus-visible:ring-1 bg-transparent w-full pr-6 ${
-                                  String(row[col] ?? "").toUpperCase().includes("REFUND")
-                                    ? "text-destructive font-bold" : ""
-                                }`}
-                              />
-                              {/* Make dropdown button - only visible on hover */}
-                              {!readOnly && (
-                                <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-5 w-5 p-0 text-xs"
-                                    title={`Make "${col}" a dropdown`}
-                                    onClick={() => {
-                                      // Get unique values from this column as initial dropdown options
-                                      const uniqueValues = [...new Set(
-                                        activeRows
-                                          .map(r => String(r[col] ?? "").trim())
-                                          .filter(v => v !== "")
-                                      )];
-                                      const initialOpts = uniqueValues.slice(0, 10); // Limit to 10 initial options
-                                      makeColumnDropdown(col, initialOpts);
-                                      toast.success(`"${col}" is now a dropdown with ${initialOpts.length} options`);
+                  {/* Only render rows in the visible window */}
+                  {activeRows.slice(visibleStart, visibleEnd).map((row, sliceIdx) => {
+                    const idx = visibleStart + sliceIdx;
+                    const isEditing = editingCell?.rowIdx === idx;
+                    return (
+                      <tr
+                        key={idx}
+                        className="hover:bg-secondary/20 transition-colors"
+                        style={useVirtualization ? { height: ROW_HEIGHT } : undefined}
+                      >
+                        <td
+                          style={{ width: 36 }}
+                          className="border-r bg-secondary/10 text-[11px] text-muted-foreground text-center px-1 select-none"
+                        >
+                          {idx + 1}
+                        </td>
+
+                        {activeCols.map((col) => {
+                          const hasDropdown =
+                            activeSheet?.dropdowns?.[col] && activeSheet.dropdowns[col].length > 0;
+                          const dropdownOptions = activeSheet?.dropdowns?.[col] || [];
+                          const cellValue = row[col] ?? "";
+                          const thisCellEditing = isEditing && editingCell?.col === col;
+                          const refundHighlight = String(cellValue)
+                            .toUpperCase()
+                            .includes("REFUND");
+
+                          return (
+                            <td
+                              key={col}
+                              style={{ width: colWidth(col) }}
+                              className="border-r p-0.5 relative group"
+                              onClick={() => {
+                                if (!readOnly && !isAssignCol(col) && !hasDropdown) {
+                                  startEdit(idx, col);
+                                }
+                              }}
+                            >
+                              {/* "Assigned to" columns → UserPicker (all employees from all depts) */}
+                              {isAssignCol(col) ? (
+                                readOnly ? (
+                                  <span className="px-2 text-xs block py-1">
+                                    {cellValue || "—"}
+                                  </span>
+                                ) : (
+                                  <UserPicker
+                                    people={allEmployees}
+                                    value={row.__assigned_to_id || null}
+                                    onChange={(empId) => updateAssignedTo(idx, col, empId)}
+                                    placeholder="Select employee…"
+                                    compact
+                                  />
+                                )
+                              ) : hasDropdown && !readOnly ? (
+                                /* Columns with dropdowns → Select component with add option */
+                                <div className="relative" onClick={(e) => e.stopPropagation()}>
+                                  <Select
+                                    value={cellValue || ""}
+                                    onValueChange={(value) => {
+                                      if (value === "__add_new__") {
+                                        openDropdownManager(col);
+                                      } else {
+                                        updateCell(idx, col, value);
+                                      }
                                     }}
                                   >
-                                    ▼
-                                  </Button>
+                                    <SelectTrigger className="h-7 text-xs border-0 bg-transparent px-1.5 pr-6">
+                                      <SelectValue placeholder="Select..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {dropdownOptions.map((option, optIdx) => (
+                                        <SelectItem key={optIdx} value={option}>
+                                          {option}
+                                        </SelectItem>
+                                      ))}
+                                      <SelectItem
+                                        value="__add_new__"
+                                        className="text-primary font-medium"
+                                      >
+                                        + Add new option
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  {/* Column dropdown management button - only visible on hover */}
+                                  <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-5 w-5 p-0 text-xs"
+                                      title={`Manage ${col} dropdown`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openDropdownManager(col);
+                                      }}
+                                    >
+                                      ⚙
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : readOnly ? (
+                                /* Read-only mode: always plain text */
+                                <span
+                                  className={`px-2 text-xs block py-1 truncate ${refundHighlight ? "text-destructive font-bold" : ""}`}
+                                >
+                                  {cellValue || ""}
+                                </span>
+                              ) : thisCellEditing ? (
+                                /* This cell is actively being edited → Input */
+                                <Input
+                                  ref={editInputRef}
+                                  value={cellValue}
+                                  onChange={(e) => {
+                                    setEditingCell((ec) =>
+                                      ec?.rowIdx === idx && ec?.col === col
+                                        ? { rowIdx: idx, col }
+                                        : ec,
+                                    );
+                                    updateCell(idx, col, e.target.value);
+                                  }}
+                                  onBlur={(e) => commitEdit(col, e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      commitEdit(col, (e.target as HTMLInputElement).value);
+                                    } else if (e.key === "Escape") {
+                                      setEditingCell(null);
+                                    }
+                                  }}
+                                  className={`h-7 text-xs border bg-background/80 focus-visible:ring-1 w-full ${refundHighlight ? "text-destructive font-bold" : ""}`}
+                                />
+                              ) : (
+                                /* Not being edited → plain text, 10x lighter than Input */
+                                <div className="relative">
+                                  <span
+                                    className={`px-2 text-xs block py-1 truncate cursor-text min-h-[28px] flex items-center ${refundHighlight ? "text-destructive font-bold" : ""}`}
+                                  >
+                                    {cellValue || (
+                                      <span className="text-muted-foreground/40">&nbsp;</span>
+                                    )}
+                                  </span>
+                                  {/* Make dropdown button - only visible on hover */}
+                                  {!readOnly && (
+                                    <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-5 w-5 p-0 text-xs"
+                                        title={`Make "${col}" a dropdown`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // Get unique values from this column as initial dropdown options
+                                          const uniqueValues = [
+                                            ...new Set(
+                                              activeRows
+                                                .map((r) => String(r[col] ?? "").trim())
+                                                .filter((v) => v !== ""),
+                                            ),
+                                          ];
+                                          const initialOpts = uniqueValues.slice(0, 10); // Limit to 10 initial options
+                                          makeColumnDropdown(col, initialOpts);
+                                          toast.success(
+                                            `"${col}" is now a dropdown with ${initialOpts.length} options`,
+                                          );
+                                        }}
+                                      >
+                                        ▼
+                                      </Button>
+                                    </div>
+                                  )}
                                 </div>
                               )}
-                            </div>
-                          )}
-                        </td>
-                      );
-                    })}
+                            </td>
+                          );
+                        })}
 
-                    {!readOnly && (
-                      <td style={{ width: colWidth("__action") > 0 ? colWidth("__action") : 180 }}
-                        className="p-1 text-center">
-                        <div className="flex items-center gap-1 justify-center">
-                          {/* Assign Task button — always visible, works with any document structure */}
-                          {onAssignTask && (
-                            <Button size="sm"
-                              variant={row.__assigned_to_id ? "default" : "outline"}
-                              className="h-7 text-[11px] px-2.5 gap-1 font-semibold whitespace-nowrap"
-                              onClick={() => onAssignTask(row, idx, activeSheet?.name ?? "")}>
-                              <Send className="size-3" />
-                              {row.__assigned_to_id ? "Assign Task" : "Assign Task"}
-                            </Button>
-                          )}
-                          <Button size="icon" variant="ghost"
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
-                            onClick={() => deleteRow(idx)}>
-                            <Trash2 className="size-3" />
-                          </Button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
+                        {!readOnly && (
+                          <td
+                            style={{ width: colWidth("__action") > 0 ? colWidth("__action") : 180 }}
+                            className="p-1 text-center"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="flex items-center gap-1 justify-center">
+                              {/* Assign Task button — always visible, works with any document structure */}
+                              {onAssignTask && (
+                                <Button
+                                  size="sm"
+                                  variant={row.__assigned_to_id ? "default" : "outline"}
+                                  className="h-7 text-[11px] px-2.5 gap-1 font-semibold whitespace-nowrap"
+                                  onClick={() => onAssignTask(row, idx, activeSheet?.name ?? "")}
+                                >
+                                  <Send className="size-3" />
+                                  Assign Task
+                                </Button>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                                onClick={() => deleteRow(idx)}
+                              >
+                                <Trash2 className="size-3" />
+                              </Button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+
+                  {/* Virtualization: bottom padding spacer */}
+                  {useVirtualization && visibleEnd < activeRows.length && (
+                    <tr>
+                      <td
+                        colSpan={activeCols.length + (readOnly ? 1 : 2)}
+                        style={{
+                          height: (activeRows.length - visibleEnd) * ROW_HEIGHT,
+                          padding: 0,
+                          border: 0,
+                        }}
+                      />
+                    </tr>
+                  )}
+                </>
               )}
             </tbody>
           </table>
         )}
       </div>
 
+      {/* Row count / virtualization indicator */}
+      {activeCols.length > 0 && activeRows.length > 0 && (
+        <div className="px-4 py-1.5 text-[10px] text-muted-foreground bg-secondary/20 flex items-center justify-between">
+          <span>
+            {activeRows.length} row{activeRows.length !== 1 ? "s" : ""} · {activeCols.length} column
+            {activeCols.length !== 1 ? "s" : ""}
+            {useVirtualization &&
+              ` · rendering ${visibleEnd - visibleStart} visible rows (virtualized for speed)`}
+          </span>
+          <span>Tip: click any cell to edit · Enter to confirm · Esc to cancel</span>
+        </div>
+      )}
+
       {/* ── Sheet tabs ── */}
       <div className="flex items-center gap-0.5 overflow-x-auto bg-secondary/30 px-2 py-1 border-t">
         {!readOnly && (
           <>
-            <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" title="Add sheet"
-              onClick={() => setAddSheetOpen(true)}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 shrink-0"
+              title="Add sheet"
+              onClick={() => setAddSheetOpen(true)}
+            >
               <Plus className="size-3.5" />
             </Button>
             <div className="h-4 w-px bg-border mx-1 shrink-0" />
@@ -959,7 +1353,10 @@ export function SalesIndividualTracker({
               {!readOnly && (
                 <button
                   title={`Delete "${s.name}"`}
-                  onClick={(e) => { e.stopPropagation(); setDeleteSheetId(s.id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteSheetId(s.id);
+                  }}
                   className="ml-0.5 mr-1 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/tab:opacity-100 transition-opacity"
                 >
                   <X className="size-2.5" />
@@ -975,13 +1372,22 @@ export function SalesIndividualTracker({
       {/* Add Sheet */}
       <Dialog open={addSheetOpen} onOpenChange={setAddSheetOpen}>
         <DialogContent className="sm:max-w-xs">
-          <DialogHeader><DialogTitle>Add New Sheet</DialogTitle></DialogHeader>
-          <Input value={newSheetName} onChange={(e) => setNewSheetName(e.target.value)}
+          <DialogHeader>
+            <DialogTitle>Add New Sheet</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={newSheetName}
+            onChange={(e) => setNewSheetName(e.target.value)}
             placeholder="e.g. SEPTEMBER SALES"
-            onKeyDown={(e) => e.key === "Enter" && addSheet()} />
+            onKeyDown={(e) => e.key === "Enter" && addSheet()}
+          />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddSheetOpen(false)}>Cancel</Button>
-            <Button onClick={addSheet} disabled={!newSheetName.trim()}>Add</Button>
+            <Button variant="outline" onClick={() => setAddSheetOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addSheet} disabled={!newSheetName.trim()}>
+              Add
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1001,8 +1407,12 @@ export function SalesIndividualTracker({
               : "This sheet is empty."}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteSheetId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={doDeleteSheet}>Delete Sheet</Button>
+            <Button variant="outline" onClick={() => setDeleteSheetId(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={doDeleteSheet}>
+              Delete Sheet
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1017,12 +1427,16 @@ export function SalesIndividualTracker({
           </DialogHeader>
           <p className="text-sm">
             Remove all <strong>{activeRows.length} rows</strong> from{" "}
-            <strong>"{activeSheet?.name}"</strong>?
-            The sheet tab stays but all data will be deleted.
+            <strong>"{activeSheet?.name}"</strong>? The sheet tab stays but all data will be
+            deleted.
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClearTableOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={clearActiveSheet}>Clear All Rows</Button>
+            <Button variant="outline" onClick={() => setClearTableOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={clearActiveSheet}>
+              Clear All Rows
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1039,7 +1453,10 @@ export function SalesIndividualTracker({
               <Label className="text-sm font-medium">Current options:</Label>
               <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
                 {(activeSheet?.dropdowns?.[managingColumn] || []).map((option, idx) => (
-                  <div key={idx} className="flex items-center justify-between bg-secondary/30 rounded px-2 py-1">
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between bg-secondary/30 rounded px-2 py-1"
+                  >
                     <span className="text-xs">{option}</span>
                     <Button
                       size="sm"
@@ -1056,7 +1473,7 @@ export function SalesIndividualTracker({
                 )}
               </div>
             </div>
-            
+
             {/* Add new option */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Add new option:</Label>
@@ -1077,19 +1494,24 @@ export function SalesIndividualTracker({
                 </Button>
               </div>
             </div>
-            
+
             {/* Actions */}
             <div className="flex gap-2 pt-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setSheets(prev => prev.map(s => s.id === activeSheetId ? 
-                    { ...s, dropdowns: { ...s.dropdowns, [managingColumn]: [] } } : s));
+                  setSheets((prev) =>
+                    prev.map((s) =>
+                      s.id === activeSheetId
+                        ? { ...s, dropdowns: { ...s.dropdowns, [managingColumn]: [] } }
+                        : s,
+                    ),
+                  );
                   setDirty(true);
                   toast.success(`Cleared all options for "${managingColumn}"`);
                 }}
-                disabled={!(activeSheet?.dropdowns?.[managingColumn]?.length)}
+                disabled={!activeSheet?.dropdowns?.[managingColumn]?.length}
               >
                 Clear All
               </Button>

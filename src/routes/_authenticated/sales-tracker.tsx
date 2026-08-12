@@ -187,6 +187,7 @@ function SalesTrackerPage() {
         allEmployees={allProfiles}
         onAssignTask={openAssignTask}
         userId={user?.id}
+        enabled={true}
       />
 
       {/* Assign Task Dialog */}
