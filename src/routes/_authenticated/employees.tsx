@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { PageHeader } from "@/components/common/PageHeader";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useDepartments, useProfiles, useProjects } from "@/hooks/useData";
 import { useAuth } from "@/hooks/useAuth";
 import { useScope } from "@/hooks/useScope";
@@ -54,6 +54,7 @@ function EmployeesPage() {
         {people.map((p) => (
           <article key={p.id} className="surface-card animate-rise flex items-center gap-4 p-5">
             <Avatar className="size-12">
+              <AvatarImage src={p.avatar_url ?? undefined} className="object-cover" />
               <AvatarFallback className="bg-primary/15 text-primary font-semibold">
                 {initials(p.full_name)}
               </AvatarFallback>

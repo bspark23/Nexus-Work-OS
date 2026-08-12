@@ -65,7 +65,7 @@ function SalesTrackerPage() {
     const { row, sheetName } = assignRow;
     // Match by ID first (stored by UserPicker), fallback to name
     const emp =
-      allProfiles.find((p) => p.id === row.assigned_to_id) ??
+      allProfiles.find((p) => p.id === row.__assigned_to_id) ??
       allProfiles.find((p) => p.full_name === row.assigned_to);
     if (!emp) {
       toast.error("Could not find the assigned employee on the platform");
@@ -137,7 +137,7 @@ function SalesTrackerPage() {
               <Send className="inline size-4 mr-2 text-primary" />
               Assign Task to{" "}
               {assignRow?.row.assigned_to ||
-                allProfiles.find((p) => p.id === assignRow?.row.assigned_to_id)?.full_name ||
+                allProfiles.find((p) => p.id === assignRow?.row.__assigned_to_id)?.full_name ||
                 "Employee"}
             </DialogTitle>
           </DialogHeader>
