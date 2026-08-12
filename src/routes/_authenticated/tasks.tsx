@@ -1,8 +1,8 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ListChecks, Plus, Trash2, User2, AlarmClock, TriangleAlert,
-  CheckCircle2, Clock, Send, Link as LinkIcon, ThumbsUp,
+  CheckCircle2, Clock, Send, ThumbsUp, RefreshCw, ArrowRightLeft, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -69,6 +69,17 @@ function TasksPage() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Partial<Task>>(emptyAdmin);
 
+  // Reassign dialog
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignTask, setReassignTask] = useState<Task | null>(null);
+  const [reassignTo, setReassignTo] = useState<string>("");
+  const [reassignDept, setReassignDept] = useState<string>("");
+
+  // Transfer dialog
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTask, setTransferTask] = useState<Task | null>(null);
+  const [transferToDept, setTransferToDept] = useState<string>("");
+
   // Employee submit-update dialog
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitDraft, setSubmitDraft] = useState<{
@@ -88,36 +99,51 @@ function TasksPage() {
       ? allProfiles.filter((p) => p.department_id === departmentId)
       : allProfiles;
 
+  const [taskBusy, setTaskBusy] = useState(false);
+  const [reassignBusy, setReassignBusy] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+
   async function submitAssign() {
     if (!draft.title || !user) return;
     if (!draft.assigned_to) { toast.error("Select an employee to assign this task to"); return; }
+    setTaskBusy(true);
     try {
+      const isEdit = !!draft.id;
       const taskData: Partial<Task> = {
         ...draft,
         owner_id: draft.assigned_to!,
         assigned_by: user.id,
         department_id: draft.department_id ?? departmentId ?? null,
-        progress: 0,
-        status: "pending",
-        review_status: null,
+        // Only reset progress/status for NEW tasks, not edits
+        ...(isEdit ? {} : { progress: 0, status: "pending", review_status: null }),
       };
       const id = await saveTask(taskData);
-      await broadcast({
-        userId: draft.assigned_to ?? null,
-        departmentId: taskData.department_id ?? null,
-        title: "New task assigned to you",
-        body: `"${draft.title}"  due ${draft.due_date ?? "no deadline"}`,
-        actorId: user.id, type: "task",
-      });
-      await logActivity({
-        actor_id: user.id, action: "assigned task", entity_type: "task", entity_id: id,
-        department_id: taskData.department_id ?? null,
-        description: `${profile?.full_name ?? "Admin"} assigned "${draft.title}" to ${deptPeople.find(p => p.id === draft.assigned_to)?.full_name ?? "employee"}`,
-      });
-      toast.success("Task assigned");
+      if (!isEdit) {
+        await broadcast({
+          userId: draft.assigned_to ?? null,
+          departmentId: taskData.department_id ?? null,
+          title: "New task assigned to you",
+          body: `"${draft.title}" — due ${draft.due_date ?? "no deadline"}`,
+          actorId: user.id, type: "task",
+        });
+        await logActivity({
+          actor_id: user.id, action: "assigned task", entity_type: "task", entity_id: id,
+          department_id: taskData.department_id ?? null,
+          description: `${profile?.full_name ?? "Admin"} assigned "${draft.title}" to ${deptPeople.find(p => p.id === draft.assigned_to)?.full_name ?? "employee"}`,
+        });
+      } else {
+        await logActivity({
+          actor_id: user.id, action: "updated task", entity_type: "task", entity_id: id,
+          department_id: taskData.department_id ?? null,
+          description: `${profile?.full_name ?? "Admin"} updated "${draft.title}" — status: ${draft.status}`,
+        });
+      }
+      toast.success(isEdit ? "Task updated" : "Task assigned");
       setOpen(false); setDraft(emptyAdmin);
       qc.invalidateQueries({ queryKey: ["tasks"] });
     } catch (e) { toast.error(e instanceof Error ? e.message : "Could not save task"); }
+    finally { setTaskBusy(false); }
   }
 
   async function submitEmployeeUpdate() {
@@ -138,30 +164,107 @@ function TasksPage() {
       reason ? `\n Reason: ${reason}` : "",
     ].filter(Boolean).join("").trim();
 
+    // Optimistic update for instant UI feedback
     setLocalOverrides(prev => ({ ...prev, [id]: { status, progress: finalProgress, notes: fullNotes || null, ...(nowDone ? { completed_at: completedDate || new Date().toISOString() } : {}) } }));
     setSubmitOpen(false); setSubmitDraft(null);
-    toast.success(nowDone ? "Task submitted for review " : `Task updated to "${status}"`);
+    toast.success(nowDone ? "Task submitted for review ✓" : `Task updated to "${status}"`);
 
+    setSubmitBusy(true);
     try {
       await saveTask({ id, status, progress: finalProgress, notes: fullNotes || null, review_status: nowDone ? "pending_review" : null, ...(nowDone ? { completed_at: completedDate || new Date().toISOString() } : {}) });
       if (nowDone && assignedBy) {
-        await broadcast({ userId: assignedBy, departmentId: deptId ?? null, title: "Task completed  awaiting review", body: `"${taskTitle}" was completed. Please review and approve.`, actorId: user.id, type: "task" });
+        await broadcast({ userId: assignedBy, departmentId: deptId ?? null, title: "Task completed — awaiting review", body: `"${taskTitle}" was completed. Please review and approve.`, actorId: user.id, type: "task" });
       }
       if (status === "blocked") {
         await broadcast({ departmentId: deptId ?? null, title: "Task blocked", body: `"${taskTitle}" is blocked: ${reason}`, actorId: user.id, type: "warning" });
       }
-      await logActivity({ actor_id: user.id, action: `task ${status}`, entity_type: "task", entity_id: id, department_id: profile?.department_id ?? null, description: `${profile?.full_name ?? "Employee"} updated "${taskTitle}" to ${status}${reason ? `  ${reason}` : ""}` });
+      await logActivity({ actor_id: user.id, action: `task ${status}`, entity_type: "task", entity_id: id, department_id: profile?.department_id ?? null, description: `${profile?.full_name ?? "Employee"} updated "${taskTitle}" to ${status}${reason ? ` — ${reason}` : ""}` });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       setLocalOverrides(prev => { const n = { ...prev }; delete n[id]; return n; });
-    } catch { setLocalOverrides(prev => { const n = { ...prev }; delete n[id]; return n; }); toast.error("Could not update  please try again"); }
+    } catch {
+      setLocalOverrides(prev => { const n = { ...prev }; delete n[id]; return n; });
+      toast.error("Could not update — please try again");
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
+
+  async function submitReassign() {
+    if (!reassignTask || !reassignTo || !user) return;
+    const newOwner = allProfiles.find(p => p.id === reassignTo);
+    setReassignBusy(true);
+    try {
+      await saveTask({
+        id: reassignTask.id,
+        owner_id: reassignTo,
+        assigned_to: reassignTo,
+        assigned_by: user.id,
+        department_id: reassignDept || reassignTask.department_id,
+        status: "pending",
+        progress: 0,
+        review_status: null,
+      });
+      await broadcast({
+        userId: reassignTo,
+        departmentId: (reassignDept || reassignTask.department_id) ?? null,
+        title: "Task reassigned to you",
+        body: `"${reassignTask.title}" has been reassigned to you.`,
+        actorId: user.id,
+        type: "task",
+      });
+      await logActivity({
+        actor_id: user.id,
+        action: "reassigned task",
+        entity_type: "task",
+        entity_id: reassignTask.id,
+        department_id: reassignDept || (reassignTask.department_id ?? null),
+        description: `${profile?.full_name ?? "Admin"} reassigned "${reassignTask.title}" to ${newOwner?.full_name ?? "employee"}`,
+      });
+      toast.success(`Task reassigned to ${newOwner?.full_name ?? "employee"}`);
+      setReassignOpen(false); setReassignTask(null); setReassignTo(""); setReassignDept("");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not reassign"); }
+    finally { setReassignBusy(false); }
+  }
+
+  async function submitTransfer() {
+    if (!transferTask || !transferToDept || !user) return;
+    setTransferBusy(true);
+    try {
+      await saveTask({
+        id: transferTask.id,
+        department_id: transferToDept,
+        status: "pending",
+        review_status: null,
+      });
+      await broadcast({
+        departmentId: transferToDept,
+        title: "Task transferred to your department",
+        body: `"${transferTask.title}" has been transferred to your department.`,
+        actorId: user.id,
+        type: "task",
+      });
+      await logActivity({
+        actor_id: user.id,
+        action: "transferred task",
+        entity_type: "task",
+        entity_id: transferTask.id,
+        department_id: transferToDept,
+        description: `${profile?.full_name ?? "Admin"} transferred "${transferTask.title}" to ${departments.find(d => d.id === transferToDept)?.name ?? "department"}`,
+      });
+      toast.success(`Task transferred to ${departments.find(d => d.id === transferToDept)?.name}`);
+      setTransferOpen(false); setTransferTask(null); setTransferToDept("");
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Could not transfer"); }
+    finally { setTransferBusy(false); }
   }
 
   async function approveTask(t: Task) {
     if (!user) return;
     await saveTask({ id: t.id, review_status: "approved" });
-    await broadcast({ userId: t.owner_id, departmentId: t.department_id ?? null, title: "Task approved  Great job!", body: `"${t.title}" has been reviewed and approved.`, actorId: user.id, type: "success" });
+    await broadcast({ userId: t.owner_id, departmentId: t.department_id ?? null, title: "Task approved — Great job!", body: `"${t.title}" has been reviewed and approved.`, actorId: user.id, type: "success" });
     await logActivity({ actor_id: user.id, action: "approved task", entity_type: "task", entity_id: t.id, department_id: t.department_id ?? null, description: `${profile?.full_name} approved task "${t.title}"` });
-    toast.success("Task approved  employee notified");
+    toast.success("Task approved — employee notified");
     setReviewOpen(false); setReviewTask(null);
     qc.invalidateQueries({ queryKey: ["tasks"] });
   }
@@ -175,29 +278,128 @@ function TasksPage() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
   }
 
-  const columns = TASK_STATUSES.map(s => ({ ...s, items: tasks.filter(t => t.status === s.value) }));
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterDept, setFilterDept] = useState<string>("all");
+  const [filterPriority, setFilterPriority] = useState<string>("all");
+
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(t => {
+      if (searchTerm) {
+        const q = searchTerm.toLowerCase();
+        const matchesTitle = t.title.toLowerCase().includes(q);
+        const matchesDesc = t.description?.toLowerCase().includes(q);
+        const assignee = allProfiles.find(p => p.id === t.owner_id)?.full_name?.toLowerCase();
+        if (!matchesTitle && !matchesDesc && !assignee?.includes(q)) return false;
+      }
+      if (filterDept !== "all" && t.department_id !== filterDept) return false;
+      if (filterPriority !== "all" && t.priority !== filterPriority) return false;
+      return true;
+    });
+  }, [tasks, searchTerm, filterDept, filterPriority, allProfiles]);
+
+  const columns = TASK_STATUSES.map(s => ({ ...s, items: filteredTasks.filter(t => t.status === s.value) }));
+
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter(t => t.status === "done").length;
+  const pendingTasks = tasks.filter(t => t.status === "pending" || t.status === "in_progress").length;
+  const blockedTasks = tasks.filter(t => t.status === "blocked").length;
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        title="Tasks"
-        subtitle={isAdmin ? "All tasks across the company." : isDeptAdmin ? "All tasks in your department." : "Your assigned tasks."}
-        actions={canManage ? <Button onClick={() => { setDraft(emptyAdmin); setOpen(true); }}><Plus className="size-4" /> Assign task</Button> : null}
+        title="Tasks Workspace"
+        subtitle={isAdmin ? "Overview and management of all tasks across departments." : isDeptAdmin ? "Department task management & oversight." : "Your assigned tasks & deliverables."}
+        actions={canManage ? <Button onClick={() => { setDraft(emptyAdmin); setOpen(true); }} className="gap-2"><Plus className="size-4" /> Assign Task</Button> : null}
       />
+
+      {/* Overview Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="surface-card p-4 rounded-xl border flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Total Tasks</p>
+            <p className="text-2xl font-bold mt-0.5">{totalTasks}</p>
+          </div>
+          <div className="size-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold">
+            <ListChecks className="size-5" />
+          </div>
+        </div>
+        <div className="surface-card p-4 rounded-xl border flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">In Progress / Pending</p>
+            <p className="text-2xl font-bold text-info mt-0.5">{pendingTasks}</p>
+          </div>
+          <div className="size-10 rounded-lg bg-info/10 flex items-center justify-center text-info font-bold">
+            <Clock className="size-5" />
+          </div>
+        </div>
+        <div className="surface-card p-4 rounded-xl border flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Completed</p>
+            <p className="text-2xl font-bold text-success mt-0.5">{completedTasks}</p>
+          </div>
+          <div className="size-10 rounded-lg bg-success/10 flex items-center justify-center text-success font-bold">
+            <CheckCircle2 className="size-5" />
+          </div>
+        </div>
+        <div className="surface-card p-4 rounded-xl border flex items-center justify-between">
+          <div>
+            <p className="text-xs text-muted-foreground font-medium">Blocked</p>
+            <p className="text-2xl font-bold text-destructive mt-0.5">{blockedTasks}</p>
+          </div>
+          <div className="size-10 rounded-lg bg-destructive/10 flex items-center justify-center text-destructive font-bold">
+            <TriangleAlert className="size-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="surface-card p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[240px]">
+          <Input
+            placeholder="Search tasks, descriptions, employees…"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="h-9 text-xs max-w-xs"
+          />
+          {isAdmin && (
+            <Select value={filterDept} onValueChange={setFilterDept}>
+              <SelectTrigger className="h-9 text-xs w-[160px]">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={filterPriority} onValueChange={setFilterPriority}>
+            <SelectTrigger className="h-9 text-xs w-[130px]">
+              <SelectValue placeholder="Priority" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Priorities</SelectItem>
+              {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {tasks.length === 0 ? (
         <EmptyState icon={<ListChecks className="size-6" />} title="No tasks yet"
           description={canManage ? "Assign a task to an employee to get started." : "No tasks have been assigned to you yet."}
           action={canManage ? <Button onClick={() => { setDraft(emptyAdmin); setOpen(true); }}><Plus className="size-4" /> Assign task</Button> : undefined} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {columns.map(c => (
-            <section key={c.value} className="surface-card animate-rise flex flex-col p-4">
-              <header className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold">{c.label}</h2>
-                <span className="bg-secondary text-muted-foreground rounded-full px-2 py-0.5 text-[11px]">{c.items.length}</span>
+            <section key={c.value} className="surface-card animate-rise flex flex-col p-3.5 rounded-xl border">
+              <header className="mb-3 flex items-center justify-between pb-2 border-b">
+                <div className="flex items-center gap-1.5">
+                  {statusIcon(c.value)}
+                  <h2 className="text-xs font-semibold uppercase tracking-wider">{c.label}</h2>
+                </div>
+                <span className="bg-secondary text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-bold">{c.items.length}</span>
               </header>
-              <ul className="space-y-2">
+              <ul className="space-y-2.5">
                 {c.items.map(t => {
                   const assigneeName = allProfiles.find(p => p.id === t.owner_id)?.full_name;
                   const assigner = allProfiles.find(p => p.id === t.assigned_by)?.full_name;
@@ -237,14 +439,26 @@ function TasksPage() {
                         <span className={`text-[11px] ${overdue ? "text-warning font-medium" : "text-muted-foreground"}`}>{formatDate(t.due_date)}</span>
                       </div>
 
-                      <div className="mt-2 space-y-1.5">
+                      <div className="mt-3 pt-2 border-t border-border/60 space-y-1.5">
                         {canManage ? (
                           <>
-                            <Button size="sm" variant="outline" className="h-7 w-full text-xs" onClick={() => { setDraft({ ...t }); setOpen(true); }}>Edit</Button>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 gap-1" onClick={() => { setDraft({ ...t }); setOpen(true); }}>
+                                Edit
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-[11px] px-2 gap-1"
+                                onClick={() => { setReassignTask(t as Task); setReassignDept(t.department_id ?? ""); setReassignTo(""); setReassignOpen(true); }}>
+                                <RefreshCw className="size-3 shrink-0" /> Reassign
+                              </Button>
+                            </div>
+                            <Button size="sm" variant="outline" className="h-7 w-full text-[11px] px-2 gap-1 justify-center"
+                              onClick={() => { setTransferTask(t as Task); setTransferToDept(""); setTransferOpen(true); }}>
+                              <ArrowRightLeft className="size-3 shrink-0" /> Transfer Department
+                            </Button>
                             {pendingReview && (
-                              <Button size="sm" className="h-7 w-full text-xs bg-info/20 text-info border-info/30" variant="outline"
+                              <Button size="sm" className="h-7 w-full text-[11px] bg-info/20 text-info border-info/30 hover:bg-info/30" variant="outline"
                                 onClick={() => { setReviewTask(t as any); setReviewOpen(true); }}>
-                                <ThumbsUp className="size-3" /> Review submission
+                                <ThumbsUp className="size-3 shrink-0" /> Review submission
                               </Button>
                             )}
                           </>
@@ -308,7 +522,10 @@ function TasksPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submitAssign} disabled={!draft.title || !draft.assigned_to}>{draft.id ? "Save changes" : "Assign task"}</Button>
+            <Button onClick={submitAssign} disabled={taskBusy || !draft.title || !draft.assigned_to}>
+              {taskBusy && <Loader2 className="size-4 animate-spin" />}
+              {draft.id ? "Save changes" : "Assign task"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -364,14 +581,88 @@ function TasksPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)}>Cancel</Button>
-            <Button onClick={submitEmployeeUpdate}>{submitDraft?.status === "done" ? <><Send className="size-4" /> Submit for review</> : "Save update"}</Button>
+            <Button onClick={submitEmployeeUpdate} disabled={submitBusy}>
+              {submitBusy && <Loader2 className="size-4 animate-spin" />}
+              {submitDraft?.status === "done" ? <><Send className="size-4" /> Submit for review</> : "Save update"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Admin Review Dialog */}
       <ReviewDialog open={reviewOpen} task={reviewTask} onClose={() => { setReviewOpen(false); setReviewTask(null); }} onApprove={approveTask} onReject={rejectTask} />
-    </>
+
+      {/* Reassign Dialog */}
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle><RefreshCw className="inline size-4 mr-2" />Reassign Task</DialogTitle></DialogHeader>
+          {reassignTask && (
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">"{reassignTask.title}"</p>
+              {isAdmin && (
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <Select value={reassignDept} onValueChange={v => { setReassignDept(v); setReassignTo(""); }}>
+                    <SelectTrigger><SelectValue placeholder="Same or different dept…" /></SelectTrigger>
+                    <SelectContent>
+                      {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Reassign to *</Label>
+                <UserPicker
+                  people={allProfiles.filter(p => reassignDept ? p.department_id === reassignDept : (isDeptAdmin ? p.department_id === departmentId : true))}
+                  value={reassignTo || null}
+                  onChange={id => setReassignTo(id ?? "")}
+                  placeholder="Select new assignee…"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassignOpen(false)}>Cancel</Button>
+            <Button onClick={submitReassign} disabled={reassignBusy || !reassignTo}>
+              {reassignBusy && <Loader2 className="size-4 animate-spin" />}
+              Reassign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer to Department Dialog */}
+      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader><DialogTitle><ArrowRightLeft className="inline size-4 mr-2" />Transfer to Department</DialogTitle></DialogHeader>
+          {transferTask && (
+            <div className="space-y-4">
+              <p className="text-muted-foreground text-sm">"{transferTask.title}"</p>
+              <p className="text-muted-foreground text-xs">The department admin of the target department will receive this task.</p>
+              <div className="space-y-2">
+                <Label>Transfer to *</Label>
+                <Select value={transferToDept} onValueChange={setTransferToDept}>
+                  <SelectTrigger><SelectValue placeholder="Select target department…" /></SelectTrigger>
+                  <SelectContent>
+                    {departments
+                      .filter(d => d.id !== transferTask.department_id)
+                      .map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)
+                    }
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTransferOpen(false)}>Cancel</Button>
+            <Button onClick={submitTransfer} disabled={transferBusy || !transferToDept}>
+              {transferBusy && <Loader2 className="size-4 animate-spin" />}
+              Transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

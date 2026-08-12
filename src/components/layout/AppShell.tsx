@@ -23,7 +23,7 @@ import {
   Briefcase,
   FileSpreadsheet,
 } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -138,7 +138,28 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 
-function Brand() {
+/** Thin progress bar shown at the top of the page during navigation or data fetching */
+function TopLoadingBar() {
+  const isNavigating = useRouterState({ select: (s) => s.status === "pending" });
+  const isFetching = useIsFetching();
+  const visible = isNavigating || isFetching > 0;
+
+  return (
+    <div
+      className={`pointer-events-none fixed top-0 left-0 right-0 z-[100] h-0.5 overflow-hidden transition-opacity duration-300 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <div
+        className={`h-full bg-primary origin-left transition-all duration-500 ease-in-out ${
+          visible ? "animate-loading-bar" : "w-full"
+        }`}
+      />
+      {/* Glow effect */}
+      <div className="absolute right-0 top-0 h-full w-24 bg-gradient-to-l from-transparent via-primary/60 to-transparent" />
+    </div>
+  );
+}
   return (
     <div className="flex items-center justify-center px-6 py-4">
       <img
@@ -206,6 +227,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="bg-background flex min-h-screen">
+      <TopLoadingBar />
       <aside className="border-sidebar-border sticky top-0 hidden h-screen w-[264px] shrink-0 border-r lg:block">
         {sidebarBody}
       </aside>

@@ -296,3 +296,15 @@
 @utility animate-soft-pulse {
   animation: soft-pulse 2.2s ease-in-out infinite;
 }
+
+/* ── Top loading bar animation ── */
+@keyframes loading-bar {
+  0%   { width: 0%;   opacity: 1; }
+  60%  { width: 80%;  opacity: 1; }
+  90%  { width: 95%;  opacity: 1; }
+  100% { width: 100%; opacity: 0; }
+}
+
+@utility animate-loading-bar {
+  animation: loading-bar 1.8s ease-in-out infinite;
+}
