@@ -160,6 +160,8 @@ function TopLoadingBar() {
     </div>
   );
 }
+
+function Brand() {
   return (
     <div className="flex items-center justify-center px-6 py-4">
       <img
