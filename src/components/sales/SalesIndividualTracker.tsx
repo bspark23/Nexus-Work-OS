@@ -333,7 +333,20 @@ export function SalesIndividualTracker({
           finalHeaders.forEach((colName, i) => {
             row[colName] = String(r?.[i] ?? "");
           });
-          row.__assigned_to_id = "";
+          // Try to pre-match "Assigned to" column value against known employees
+          // so the UserPicker shows the right person on import
+          const assignCol = finalHeaders.find((h) =>
+            ASSIGN_COL_ALIASES.includes(h.toLowerCase().trim()),
+          );
+          if (assignCol) {
+            const nameInFile = String(row[assignCol] ?? "").trim().toLowerCase();
+            const matched = allEmployees.find(
+              (e) => e.full_name.toLowerCase() === nameInFile,
+            );
+            row.__assigned_to_id = matched?.id ?? "";
+          } else {
+            row.__assigned_to_id = "";
+          }
           return row;
         });
 
@@ -553,19 +566,22 @@ export function SalesIndividualTracker({
                     </td>
 
                     {activeCols.map((col) => (
-                      <td key={col} style={{ width: colWidth(col) }} className="border-r p-1">
-                        {/* "Assigned to" columns get the employee picker */}
-                        {!readOnly && isAssignCol(col) ? (
-                          <UserPicker
-                            people={allEmployees}
-                            value={row.__assigned_to_id || null}
-                            onChange={(empId) => updateAssignedTo(idx, col, empId)}
-                            placeholder="Assign…"
-                            compact
-                          />
-                        ) : readOnly && isAssignCol(col) ? (
-                          <span className="px-1.5 text-xs">{row[col] || "—"}</span>
+                      <td key={col} style={{ width: colWidth(col) }} className="border-r p-0.5">
+                        {/* "Assigned to" columns → UserPicker (all employees from all depts) */}
+                        {isAssignCol(col) ? (
+                          readOnly ? (
+                            <span className="px-2 text-xs block py-1">{row[col] || "—"}</span>
+                          ) : (
+                            <UserPicker
+                              people={allEmployees}
+                              value={row.__assigned_to_id || null}
+                              onChange={(empId) => updateAssignedTo(idx, col, empId)}
+                              placeholder="Select employee…"
+                              compact
+                            />
+                          )
                         ) : (
+                          /* All other columns — plain editable text input */
                           <Input
                             value={row[col] ?? ""}
                             disabled={readOnly}
@@ -580,21 +596,20 @@ export function SalesIndividualTracker({
                     ))}
 
                     {!readOnly && (
-                      <td style={{ width: colWidth("__action") > 0 ? colWidth("__action") : 160 }}
+                      <td style={{ width: colWidth("__action") > 0 ? colWidth("__action") : 180 }}
                         className="p-1 text-center">
                         <div className="flex items-center gap-1 justify-center">
-                          {/* Assign Task — only if an "assigned to" column exists and has a picked employee */}
-                          {onAssignTask && activeCols.some(isAssignCol) && row.__assigned_to_id ? (
-                            <Button size="sm" variant="default"
-                              className="h-7 text-[11px] px-2.5 gap-1 bg-primary text-primary-foreground hover:bg-primary/90 font-semibold whitespace-nowrap"
+                          {/* Assign Task button — always visible, disabled until employee is picked */}
+                          {onAssignTask && (
+                            <Button size="sm"
+                              variant={row.__assigned_to_id ? "default" : "outline"}
+                              disabled={!row.__assigned_to_id}
+                              className="h-7 text-[11px] px-2.5 gap-1 font-semibold whitespace-nowrap"
                               onClick={() => onAssignTask(row, idx, activeSheet?.name ?? "")}>
-                              <Send className="size-3" /> Assign Task
+                              <Send className="size-3" />
+                              {row.__assigned_to_id ? "Assign Task" : "Pick employee"}
                             </Button>
-                          ) : onAssignTask && activeCols.some(isAssignCol) ? (
-                            <span className="text-[10px] text-muted-foreground italic whitespace-nowrap">
-                              Pick employee first
-                            </span>
-                          ) : null}
+                          )}
                           <Button size="icon" variant="ghost"
                             className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
                             onClick={() => deleteRow(idx)}>
