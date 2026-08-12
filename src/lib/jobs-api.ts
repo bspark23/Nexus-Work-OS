@@ -99,6 +99,7 @@ export async function deleteSavedFile(fileId: string): Promise<void> {
 export type TrackerSheetData = {
   id: string;
   name: string;
+  columns: string[];
   rows: Array<Record<string, string>>;
 };
 

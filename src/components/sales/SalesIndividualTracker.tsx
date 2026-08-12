@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  FileSpreadsheet, Upload, Download, Plus, Trash2, Settings2,
+  FileSpreadsheet, Upload, Download, Plus, Trash2,
   Send, Loader2, Save, RefreshCw, FileX, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,12 +8,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { UserPicker } from "@/components/common/UserPicker";
 import { saveSharedTracker, type TrackerSheetData } from "@/lib/jobs-api";
 import { useSharedTracker } from "@/hooks/useData";
@@ -21,54 +17,19 @@ import type { Profile } from "@/lib/types";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-/**
- * A single tracker row. Keys are dynamic — whatever columns the uploaded file
- * had are stored here. The only reserved keys are the ones the "Assign Task"
- * feature needs.
- */
 export type TrackerRow = Record<string, string> & {
-  __assigned_to_id?: string; // employee uid (hidden — not shown as a column)
+  __assigned_to_id?: string;
 };
 
 export type TrackerSheet = {
   id: string;
   name: string;
-  /** Column headers in order, exactly as they came from the uploaded file */
   columns: string[];
   rows: TrackerRow[];
 };
 
-// ── Built-in sheets (empty at first, filled by upload or manual add) ───────
-
-const ALL_MONTHS = [
-  { id: "sheet1", name: "Sheet1" },
-  { id: "jan",    name: "JANUARY SALES" },
-  { id: "feb",    name: "FEBRUARY SALES" },
-  { id: "mar",    name: "MARCH SALES" },
-  { id: "apr",    name: "APRIL SALES" },
-  { id: "may",    name: "MAY SALES" },
-  { id: "jun",    name: "JUNE SALES" },
-  { id: "jul",    name: "JULY SALES" },
-  { id: "aug",    name: "AUGUST SALES" },
-  { id: "sep",    name: "SEPTEMBER SALES" },
-  { id: "oct",    name: "OCTOBER SALES" },
-  { id: "nov",    name: "NOVEMBER SALES" },
-  { id: "dec",    name: "DECEMBER SALES" },
-  { id: "tshirts", name: "TSHIRTS PRODUCTION" },
-];
-
-const INITIAL_SHEETS: TrackerSheet[] = ALL_MONTHS.map((m) => ({
-  ...m,
-  columns: [],
-  rows: [],
-}));
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-/**
- * These column names, if present in the uploaded file, get the special
- * "Assigned to" UserPicker treatment. All other columns are plain text inputs.
- */
 const ASSIGN_COL_ALIASES = [
   "assigned to", "assigned_to", "assignedto", "assigned", "employee",
 ];
@@ -81,11 +42,13 @@ function emptyRow(columns: string[]): TrackerRow {
   return Object.fromEntries(columns.map((c) => [c, ""])) as TrackerRow;
 }
 
-function mergeSheets(remote: TrackerSheetData[], _local: TrackerSheet[]): TrackerSheet[] {
+function mergeSheets(remote: TrackerSheetData[]): TrackerSheet[] {
   return remote.map((s) => ({
     id: s.id,
     name: s.name,
-    columns: (s as unknown as TrackerSheet).columns ?? Object.keys((s.rows?.[0] ?? {})).filter(k => k !== "__assigned_to_id"),
+    columns: s.columns?.length
+      ? s.columns
+      : Object.keys(s.rows?.[0] ?? {}).filter((k) => k !== "__assigned_to_id"),
     rows: (s.rows as TrackerRow[]) ?? [],
   }));
 }
@@ -112,10 +75,8 @@ function ResizableTh({
     e.preventDefault();
     startX.current = e.clientX;
     startW.current = width;
-
     function onMove(me: MouseEvent) {
-      const delta = me.clientX - startX.current;
-      onResize(colKey, Math.max(60, startW.current + delta));
+      onResize(colKey, Math.max(60, startW.current + me.clientX - startX.current));
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove);
@@ -134,7 +95,6 @@ function ResizableTh({
       <div
         onMouseDown={onMouseDown}
         className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-primary/50 active:bg-primary z-20"
-        title="Drag to resize column"
       />
     </th>
   );
@@ -156,16 +116,13 @@ export function SalesIndividualTracker({
   const qc = useQueryClient();
   const { data: remoteData, isLoading } = useSharedTracker(true);
 
-  const [sheets, setSheets] = useState<TrackerSheet[]>(INITIAL_SHEETS);
-  const [activeSheetId, setActiveSheetId] = useState("sheet1");
+  const [sheets, setSheets] = useState<TrackerSheet[]>([]);
+  const [activeSheetId, setActiveSheetId] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const [dirty, setDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Column widths — keyed by `sheetId:colName`
   const [colWidths, setColWidths] = useState<Record<string, number>>({});
-
   const [newSheetName, setNewSheetName] = useState("");
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [deleteSheetId, setDeleteSheetId] = useState<string | null>(null);
@@ -175,7 +132,9 @@ export function SalesIndividualTracker({
   useEffect(() => {
     if (!remoteData || dirty) return;
     if (remoteData.sheets.length > 0) {
-      setSheets(mergeSheets(remoteData.sheets, INITIAL_SHEETS));
+      const merged = mergeSheets(remoteData.sheets);
+      setSheets(merged);
+      setActiveSheetId((prev) => merged.find((s) => s.id === prev) ? prev : merged[0].id);
     }
   }, [remoteData]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -184,9 +143,8 @@ export function SalesIndividualTracker({
   const activeCols = activeSheet?.columns ?? [];
 
   function colWidth(col: string) {
-    return colWidths[`${activeSheetId}:${col}`] ?? Math.max(120, col.length * 9);
+    return colWidths[`${activeSheetId}:${col}`] ?? Math.max(130, col.length * 9);
   }
-
   function setColWidth(col: string, w: number) {
     setColWidths((prev) => ({ ...prev, [`${activeSheetId}:${col}`]: w }));
   }
@@ -213,11 +171,7 @@ export function SalesIndividualTracker({
       prev.map((s) => {
         if (s.id !== activeSheetId) return s;
         const rows = [...s.rows];
-        rows[rowIdx] = {
-          ...rows[rowIdx],
-          [col]: emp?.full_name ?? "",
-          __assigned_to_id: empId ?? "",
-        };
+        rows[rowIdx] = { ...rows[rowIdx], [col]: emp?.full_name ?? "", __assigned_to_id: empId ?? "" };
         return { ...s, rows };
       }),
     );
@@ -226,14 +180,9 @@ export function SalesIndividualTracker({
 
   function addRow() {
     if (readOnly) return;
-    if (activeCols.length === 0) {
-      toast.error("Add some columns first by importing a file or uploading data");
-      return;
-    }
+    if (activeCols.length === 0) { toast.error("Import a file first to get columns"); return; }
     setSheets((prev) =>
-      prev.map((s) =>
-        s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
-      ),
+      prev.map((s) => s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s),
     );
     setDirty(true);
   }
@@ -241,9 +190,7 @@ export function SalesIndividualTracker({
   function deleteRow(idx: number) {
     if (readOnly) return;
     setSheets((prev) =>
-      prev.map((s) =>
-        s.id === activeSheetId ? { ...s, rows: s.rows.filter((_, i) => i !== idx) } : s,
-      ),
+      prev.map((s) => s.id === activeSheetId ? { ...s, rows: s.rows.filter((_, i) => i !== idx) } : s),
     );
     setDirty(true);
   }
@@ -265,10 +212,8 @@ export function SalesIndividualTracker({
     if (!deleteSheetId) return;
     setSheets((prev) => {
       const remaining = prev.filter((s) => s.id !== deleteSheetId);
-      if (activeSheetId === deleteSheetId) {
-        setActiveSheetId(remaining[0]?.id ?? INITIAL_SHEETS[0].id);
-      }
-      return remaining.length > 0 ? remaining : INITIAL_SHEETS;
+      if (activeSheetId === deleteSheetId) setActiveSheetId(remaining[0]?.id ?? "");
+      return remaining;
     });
     setDeleteSheetId(null);
     setDirty(true);
@@ -276,21 +221,18 @@ export function SalesIndividualTracker({
 
   function clearActiveSheet() {
     if (readOnly) return;
-    setSheets((prev) =>
-      prev.map((s) => s.id === activeSheetId ? { ...s, rows: [] } : s),
-    );
+    setSheets((prev) => prev.map((s) => s.id === activeSheetId ? { ...s, rows: [] } : s));
     setClearTableOpen(false);
     setDirty(true);
     toast.success("All rows cleared");
   }
 
-  // ── save to Firestore ──────────────────────────────────────────────────
+  // ── save ──────────────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
     if (!userId) { toast.error("You must be signed in to save"); return; }
     setSaving(true);
     try {
-      // Cast TrackerSheet → TrackerSheetData (rows are compatible)
       const payload = sheets.map((s) => ({
         id: s.id,
         name: s.name,
@@ -308,7 +250,7 @@ export function SalesIndividualTracker({
     }
   }, [sheets, userId, qc]);
 
-  // ── import ── (use the file's own columns exactly as-is) ──────────────
+  // ── import — reads EVERY sheet, EVERY row, EVERY cell ─────────────────
 
   async function handleUpload(files: FileList | null) {
     const file = files?.[0];
@@ -317,39 +259,104 @@ export function SalesIndividualTracker({
     try {
       const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array", cellDates: true });
-      const sheetName = wb.SheetNames[0];
-      if (!sheetName) throw new Error("No sheets found in the file");
-      const ws = wb.Sheets[sheetName];
 
-      // sheet_to_json with header:1 gives us raw arrays — first row = headers
-      const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: "" });
-      if (raw.length === 0) throw new Error("File appears to be empty");
+      // dense:true keeps empty cells; cellDates converts dates properly
+      const wb = XLSX.read(buffer, { type: "array", cellDates: true, dense: true });
 
-      // First non-empty row is the header
-      const headerRow = raw[0].map((h) => String(h ?? "").trim()).filter(Boolean);
-      if (headerRow.length === 0) throw new Error("Could not detect column headers");
+      if (wb.SheetNames.length === 0) throw new Error("No sheets found in the file");
 
-      // Remaining rows become data
-      const dataRows: TrackerRow[] = raw.slice(1)
-        .filter((r) => r.some((v) => String(v ?? "").trim() !== ""))
-        .map((r) => {
+      const importedSheets: TrackerSheet[] = [];
+
+      for (const wsName of wb.SheetNames) {
+        const ws = wb.Sheets[wsName];
+        if (!ws) continue;
+
+        // Get the actual used range of the sheet
+        const ref = ws["!ref"];
+        if (!ref) {
+          // Sheet is completely empty — add it with no data
+          importedSheets.push({ id: `sheet_${wsName}_${Date.now()}`, name: wsName, columns: [], rows: [] });
+          continue;
+        }
+
+        // Use sheet_to_json with header:1 to get raw 2D array.
+        // defval:"" fills every missing cell so rows stay aligned.
+        const raw: any[][] = XLSX.utils.sheet_to_json(ws, {
+          header: 1,
+          defval: "",
+          blankrows: true,  // keep blank rows — don't skip them
+          raw: false,       // format dates/numbers as strings, just like Excel shows them
+        });
+
+        if (raw.length === 0) {
+          importedSheets.push({ id: `sheet_${wsName}_${Date.now()}`, name: wsName, columns: [], rows: [] });
+          continue;
+        }
+
+        // ── Find the actual header row ──
+        // Skip leading empty rows to find the first row that has at least one non-empty cell
+        let headerRowIdx = 0;
+        for (let i = 0; i < raw.length; i++) {
+          if (raw[i].some((v: any) => String(v ?? "").trim() !== "")) {
+            headerRowIdx = i;
+            break;
+          }
+        }
+
+        // Build header — every cell becomes a column name.
+        // If a cell is empty we use a positional name so column alignment is preserved.
+        const rawHeader: any[] = raw[headerRowIdx] ?? [];
+        const headerRow: string[] = rawHeader.map((h, i) => {
+          const val = String(h ?? "").trim();
+          return val !== "" ? val : `Col_${i + 1}`;
+        });
+
+        // Remove completely trailing empty placeholder columns
+        // (columns that were generated only because they had no header AND no data)
+        // We determine the last column that actually has data in any row
+        const dataRawRows = raw.slice(headerRowIdx + 1);
+        let lastUsedColIdx = headerRow.length - 1;
+        while (lastUsedColIdx > 0) {
+          const colHasData =
+            // header had a real value
+            String(rawHeader[lastUsedColIdx] ?? "").trim() !== "" ||
+            // or at least one data row has something in this position
+            dataRawRows.some((r) => String(r?.[lastUsedColIdx] ?? "").trim() !== "");
+          if (colHasData) break;
+          lastUsedColIdx--;
+        }
+        const finalHeaders = headerRow.slice(0, lastUsedColIdx + 1);
+
+        // ── Build data rows — keep ALL rows, including blank ones ──
+        const dataRows: TrackerRow[] = dataRawRows.map((r) => {
           const row: TrackerRow = {};
-          headerRow.forEach((h, i) => {
-            row[h] = String(r[i] ?? "").trim();
+          finalHeaders.forEach((colName, i) => {
+            row[colName] = String(r?.[i] ?? "");
           });
           row.__assigned_to_id = "";
           return row;
         });
 
-      setSheets((prev) =>
-        prev.map((s) =>
-          s.id === activeSheetId ? { ...s, columns: headerRow, rows: dataRows } : s,
-        ),
-      );
+        importedSheets.push({
+          id: `sheet_${wsName.replace(/\s+/g, "_")}_${Date.now()}`,
+          name: wsName,
+          columns: finalHeaders,
+          rows: dataRows,
+        });
+      }
+
+      if (importedSheets.length === 0) throw new Error("Could not read any sheets from the file");
+
+      // Replace current sheets with what came from the file
+      setSheets(importedSheets);
+      setActiveSheetId(importedSheets[0].id);
       setDirty(true);
       if (fileInputRef.current) fileInputRef.current.value = "";
-      toast.success(`Imported ${dataRows.length} rows with ${headerRow.length} columns — click Save to share`);
+
+      const totalRows = importedSheets.reduce((s, sh) => s + sh.rows.length, 0);
+      toast.success(
+        `Imported ${importedSheets.length} sheet${importedSheets.length > 1 ? "s" : ""} · ${totalRows} rows — click Save to share`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not parse file");
     } finally {
@@ -357,15 +364,17 @@ export function SalesIndividualTracker({
     }
   }
 
-  // ── export CSV ────────────────────────────────────────────────────────
+  // ── export ────────────────────────────────────────────────────────────
 
   function exportCsv() {
     if (!activeSheet || activeCols.length === 0) { toast.error("Nothing to export"); return; }
-    const header = activeCols.join(",");
-    const lines = activeRows.map((r) =>
-      activeCols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","),
-    );
-    const blob = new Blob([header + "\n" + lines.join("\n")], { type: "text/csv" });
+    const lines = [
+      activeCols.join(","),
+      ...activeRows.map((r) =>
+        activeCols.map((c) => `"${String(r[c] ?? "").replace(/"/g, '""')}"`).join(","),
+      ),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `${activeSheet.name.replace(/\s+/g, "_")}.csv`;
@@ -373,16 +382,11 @@ export function SalesIndividualTracker({
     toast.success("Exported to CSV");
   }
 
-  // ── export Excel ──────────────────────────────────────────────────────
-
   async function exportExcel() {
     if (!activeSheet || activeCols.length === 0) { toast.error("Nothing to export"); return; }
     try {
       const XLSX = await import("xlsx");
-      const data = [
-        activeCols,
-        ...activeRows.map((r) => activeCols.map((c) => r[c] ?? "")),
-      ];
+      const data = [activeCols, ...activeRows.map((r) => activeCols.map((c) => r[c] ?? ""))];
       const ws = XLSX.utils.aoa_to_sheet(data);
       ws["!cols"] = activeCols.map((_, ci) => ({
         wch: Math.max(...data.map((row) => String(row[ci] ?? "").length), 12),
@@ -479,7 +483,7 @@ export function SalesIndividualTracker({
       {/* ── Table ── */}
       <div className="max-h-[600px] overflow-auto border-b text-xs">
         {activeCols.length === 0 ? (
-          /* Empty state */
+          /* Empty state — no file imported yet or sheet is empty */
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             {isLoading || importing ? (
               <>
@@ -491,8 +495,8 @@ export function SalesIndividualTracker({
                 <FileSpreadsheet className="size-10 opacity-30" />
                 <p className="text-sm font-medium">No data yet</p>
                 <p className="text-xs max-w-xs text-center">
-                  Click "Import Excel/CSV" to load a file — columns will appear exactly as they are in your file.
-                  Or click "Add Row" after importing to add new entries.
+                  Click "Import Excel/CSV" to load your file. Every sheet, every row and every
+                  column will appear exactly as it is in the file.
                 </p>
                 {!readOnly && (
                   <Button variant="outline" size="sm" className="gap-1.5 mt-1"
@@ -630,7 +634,7 @@ export function SalesIndividualTracker({
                     : "text-muted-foreground hover:bg-background/60"
                 }`}
               >
-                {s.name.replace(" SALES", "").replace(" PRODUCTION", " PROD")}
+                {s.name}
                 {s.rows.length > 0 && (
                   <span className="bg-secondary text-[9px] px-1.5 py-0.5 rounded-full">
                     {s.rows.length}
