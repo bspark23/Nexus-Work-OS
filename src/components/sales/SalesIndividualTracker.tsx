@@ -576,8 +576,22 @@ export function SalesIndividualTracker({
 
       if (importedSheets.length === 0) throw new Error("Could not read any sheets from the file");
 
-      // Replace current sheets with what came from the file
-      setSheets(importedSheets);
+      // Append newly imported sheets to existing sheets instead of replacing them
+      setSheets((prev) => {
+        // Build new array preserving existing sheets
+        const prevNames = new Set(prev.map((s) => s.name.toLowerCase()));
+        const uniqueImported = importedSheets.map((s) => {
+          // If a sheet with the same name exists, give it a unique name
+          let name = s.name;
+          let counter = 1;
+          while (prevNames.has(name.toLowerCase())) {
+            name = `${s.name} (${counter++})`;
+          }
+          prevNames.add(name.toLowerCase());
+          return { ...s, name };
+        });
+        return [...prev, ...uniqueImported];
+      });
       setActiveSheetId(importedSheets[0].id);
       setDirty(true);
       if (fileInputRef.current) fileInputRef.current.value = "";

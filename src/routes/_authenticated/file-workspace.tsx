@@ -45,8 +45,7 @@ function FileWorkspacePage() {
   const qc = useQueryClient();
 
   // ── data ──────────────────────────────────────────────────────────────────
-  const { data: myFile, isLoading: myLoading } = useSavedFile(user?.id ?? null);
-  const { data: allFiles = [], isLoading: allLoading } = useAllSavedFiles(isAdmin || isDeptAdmin);
+  const { data: allFiles = [], isLoading } = useAllSavedFiles(true);
   const { data: allProfiles = [] } = useProfiles(true);
 
   // ── view state ────────────────────────────────────────────────────────────
@@ -57,7 +56,7 @@ function FileWorkspacePage() {
   const [dirty, setDirty] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
-  // ── task assignment dialog state ──────────────────────────────────────────
+  // Task assignment dialog state
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignRow, setAssignRow] = useState<{ row: TrackerRow; sheetName: string } | null>(null);
   const [taskTitle, setTaskTitle] = useState("");
@@ -69,19 +68,19 @@ function FileWorkspacePage() {
 
   // ── derived ───────────────────────────────────────────────────────────────
   const canAccess = isAdmin || isDeptAdmin || isSales;
-  const isLoading = myLoading || allLoading;
+
+  // Split files into My Files and Team Files
+  const myFiles = allFiles.filter((f) => f.owner_id === user?.id);
+  const sharedFiles = allFiles.filter((f) => f.owner_id !== user?.id);
 
   const activeFileData = selectedFileId
     ? (allFiles.find((f) => f.id === selectedFileId) ?? null)
-    : (myFile ?? null);
+    : (myFiles[0] ?? allFiles[0] ?? null);
 
   const displayRows = editRows ?? activeFileData?.rows ?? [];
   const columns = activeFileData?.columns ?? (displayRows[0] ? Object.keys(displayRows[0]) : []);
   const isPdf = activeFileData?.file_type === "pdf";
   const isOwner = activeFileData?.owner_id === user?.id;
-
-  // All team files (excluding own)
-  const sharedFiles = allFiles.filter((f) => f.owner_id !== user?.id);
 
   // ── loading / access guards ───────────────────────────────────────────────
   if (isLoading) {
@@ -112,7 +111,7 @@ function FileWorkspacePage() {
         : files[0].name.toLowerCase().endsWith(".csv")
           ? "csv"
           : "xlsx";
-      await upsertSavedFile(user.id, {
+      const newId = await upsertSavedFile(user.id, {
         file_name: files[0].name,
         file_type: fileType,
         columns: parsed.rows[0] ? Object.keys(parsed.rows[0]) : [],
@@ -122,7 +121,7 @@ function FileWorkspacePage() {
       });
       setEditRows(null);
       setDirty(false);
-      setSelectedFileId(null);
+      setSelectedFileId(newId);
       qc.invalidateQueries({ queryKey: ["saved_file", user.id] });
       qc.invalidateQueries({ queryKey: ["saved_files_all"] });
       toast.success(`"${files[0].name}" saved to your workspace`);
@@ -196,7 +195,7 @@ function FileWorkspacePage() {
   }
 
   function switchToFile(f: SavedFile) {
-    setSelectedFileId(f.id === user?.id ? null : f.id);
+    setSelectedFileId(f.id);
     setEditRows(null);
     setDirty(false);
   }
@@ -386,7 +385,7 @@ function FileWorkspacePage() {
                   <Button variant="outline" size="sm" disabled={uploading} asChild>
                     <span>
                       {uploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                      {myFile ? "Replace my file" : "Upload file"}
+                      Upload new file
                     </span>
                   </Button>
                   <input
@@ -420,28 +419,42 @@ function FileWorkspacePage() {
             <div className="surface-card overflow-hidden">
               <div className="border-b px-4 py-3 flex items-center gap-2">
                 <User className="text-muted-foreground size-4" />
-                <p className="text-sm font-semibold">My File</p>
+                <p className="text-sm font-semibold">My Saved Files</p>
+                <span className="text-muted-foreground text-xs ml-auto">{myFiles.length}</span>
               </div>
-              {myFile ? (
-                <button
-                  className={`w-full text-left px-4 py-3 flex items-start gap-2 hover:bg-secondary/50 transition-colors ${!selectedFileId ? "bg-primary/5 border-l-2 border-primary" : ""}`}
-                  onClick={() => switchToFile(myFile)}
-                >
-                  {myFile.file_type === "pdf" ? (
-                    <FileText className="text-destructive size-4 mt-0.5 shrink-0" />
-                  ) : (
-                    <FileSpreadsheet className="text-success size-4 mt-0.5 shrink-0" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-medium">{myFile.file_name}</p>
-                    <p className="text-muted-foreground text-[11px]">
-                      {new Date(myFile.updated_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </button>
-              ) : (
-                <p className="text-muted-foreground px-4 py-6 text-center text-xs">No file uploaded yet</p>
-              )}
+              <div className="divide-y max-h-[300px] overflow-y-auto">
+                {myFiles.length === 0 ? (
+                  <p className="text-muted-foreground px-4 py-6 text-center text-xs">No files uploaded yet</p>
+                ) : (
+                  myFiles.map((f) => (
+                    <div
+                      key={f.id}
+                      className={`flex items-center gap-2 px-4 py-3 hover:bg-secondary/50 transition-colors cursor-pointer ${activeFileData?.id === f.id ? "bg-primary/5 border-l-2 border-primary" : ""}`}
+                      onClick={() => switchToFile(f)}
+                    >
+                      {f.file_type === "pdf" ? (
+                        <FileText className="text-destructive size-4 shrink-0" />
+                      ) : (
+                        <FileSpreadsheet className="text-success size-4 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">{f.file_name}</p>
+                        <p className="text-muted-foreground text-[11px]">
+                          {new Date(f.updated_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-6 shrink-0"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
+                      >
+                        <Trash2 className="text-destructive size-3" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
 
             {(isAdmin || isDeptAdmin) && (

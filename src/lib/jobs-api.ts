@@ -63,22 +63,19 @@ export async function fetchSavedFile(fileId: string): Promise<SavedFile | null> 
   return { id: snap.id, ...d, updated_at: ts(d["updated_at"]), created_at: ts(d["created_at"]) } as SavedFile;
 }
 
-/** Save (upsert) a shared file — keyed by userId so each user has one active file. */
+/** Add a new saved file to the workspace. */
 export async function upsertSavedFile(
   userId: string,
   data: Pick<SavedFile, "file_name" | "file_type" | "columns" | "rows" | "text"> & { owner_name?: string },
-): Promise<void> {
-  await setDoc(
-    doc(db, "saved_files", userId),
-    {
-      owner_id: userId,
-      owner_name: data.owner_name ?? "",
-      ...data,
-      updated_at: serverTimestamp(),
-      created_at: serverTimestamp(),
-    },
-    { merge: true },
-  );
+): Promise<string> {
+  const ref = await addDoc(collection(db, "saved_files"), {
+    owner_id: userId,
+    owner_name: data.owner_name ?? "",
+    ...data,
+    updated_at: serverTimestamp(),
+    created_at: serverTimestamp(),
+  });
+  return ref.id;
 }
 
 /** Update only the rows (when user edits cells inline). */
