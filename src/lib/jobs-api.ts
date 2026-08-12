@@ -101,6 +101,7 @@ export type TrackerSheetData = {
   name: string;
   columns: string[];
   rows: Array<Record<string, string>>;
+  dropdowns?: Record<string, string[]>;
 };
 
 export type SharedTrackerDoc = {

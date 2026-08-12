@@ -22,6 +22,7 @@ import { parseJobFile } from "@/lib/job-parse";
 import { saveTask, logActivity } from "@/lib/api";
 import { broadcast } from "@/lib/notify";
 import { SalesIndividualTracker, type TrackerRow } from "@/components/sales/SalesIndividualTracker";
+import { UserPicker } from "@/components/common/UserPicker";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -63,6 +64,7 @@ function FileWorkspacePage() {
   const [taskDesc, setTaskDesc] = useState("");
   const [taskDeadline, setTaskDeadline] = useState("");
   const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
@@ -215,29 +217,85 @@ function FileWorkspacePage() {
 
   function openAssignTask(row: TrackerRow, _idx: number, sheetName: string) {
     setAssignRow({ row, sheetName });
-    setTaskTitle(`${row.services} — ${row.company_customer}`.trim());
-    setTaskDesc(
-      `Client: ${row.company_customer}\nServices: ${row.services}\nPhone: ${row.country_code}${row.phone}\nComment: ${row.comment}`.trim(),
-    );
-    setTaskDeadline(row.delivery_date || "");
+    
+    // Generate a smart task title from available data
+    const possibleTitleFields = ['services', 'service', 'task', 'title', 'description', 'company_customer', 'customer', 'client', 'project'];
+    const possibleClientFields = ['company_customer', 'customer', 'client', 'company', 'business'];
+    
+    let taskTitle = "";
+    let clientName = "";
+    
+    // Find the best title field
+    for (const field of possibleTitleFields) {
+      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      if (value && row[value]) {
+        taskTitle = String(row[value]).trim();
+        break;
+      }
+    }
+    
+    // Find client/customer name
+    for (const field of possibleClientFields) {
+      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      if (value && row[value]) {
+        clientName = String(row[value]).trim();
+        break;
+      }
+    }
+    
+    // Create a meaningful title and description
+    if (taskTitle && clientName) {
+      setTaskTitle(`${taskTitle} — ${clientName}`);
+    } else if (taskTitle) {
+      setTaskTitle(taskTitle);
+    } else if (clientName) {
+      setTaskTitle(`Task for ${clientName}`);
+    } else {
+      setTaskTitle(`Task from ${sheetName}`);
+    }
+    
+    // Build description from all available data
+    const descLines: string[] = [];
+    Object.entries(row).forEach(([key, value]) => {
+      if (key !== '__assigned_to_id' && value && String(value).trim()) {
+        const cleanKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        descLines.push(`${cleanKey}: ${value}`);
+      }
+    });
+    setTaskDesc(descLines.join('\n'));
+    
+    // Try to find a deadline field
+    const deadlineFields = ['delivery_date', 'due_date', 'deadline', 'completion_date', 'target_date'];
+    let deadline = "";
+    for (const field of deadlineFields) {
+      const value = Object.keys(row).find(k => k.toLowerCase().includes(field.toLowerCase()));
+      if (value && row[value]) {
+        deadline = String(row[value]).trim();
+        break;
+      }
+    }
+    setTaskDeadline(deadline);
     setTaskPriority("medium");
+    
+    // Pre-select the assignee if one was chosen in the table
+    setTaskAssigneeId(row.__assigned_to_id || null);
+    
     setAssignOpen(true);
   }
 
   async function submitAssignTask() {
-    if (!assignRow || !user) return;
-    const { row, sheetName } = assignRow;
-    // Match by ID first (stored by UserPicker), fallback to name match
-    const emp =
-      allProfiles.find((p) => p.id === row.__assigned_to_id) ??
-      allProfiles.find((p) => p.full_name === row.assigned_to);
+    if (!assignRow || !user || !taskAssigneeId) return;
+    const { sheetName } = assignRow;
+    
+    const emp = allProfiles.find((p) => p.id === taskAssigneeId);
     if (!emp) {
-      toast.error("Could not find the assigned employee on the platform");
+      toast.error("Please select an employee to assign this task to");
       return;
     }
+    
     setAssigning(true);
     try {
-      const title = taskTitle || `${row.services} — ${row.company_customer}`;
+      const title = taskTitle || `Task from ${sheetName}`;
       const id = await saveTask({
         owner_id: emp.id,
         assigned_to: emp.id,
@@ -567,18 +625,41 @@ function FileWorkspacePage() {
           <DialogHeader>
             <DialogTitle>
               <Send className="inline size-4 mr-2 text-primary" />
-              Assign Task to{" "}
-              {assignRow?.row.assigned_to ||
-                allProfiles.find((p) => p.id === assignRow?.row.__assigned_to_id)?.full_name ||
-                "Employee"}
+              Assign Task
+              {taskAssigneeId && (
+                <span className="text-sm font-normal text-muted-foreground ml-1">
+                  to {allProfiles.find(p => p.id === taskAssigneeId)?.full_name}
+                </span>
+              )}
             </DialogTitle>
           </DialogHeader>
           {assignRow && (
             <div className="space-y-4">
               <div className="rounded-lg bg-secondary/50 p-3 text-xs space-y-1">
-                <p><span className="font-medium">Client:</span> {assignRow.row.company_customer}</p>
-                <p><span className="font-medium">Service:</span> {assignRow.row.services}</p>
                 <p><span className="font-medium">Sheet:</span> {assignRow.sheetName}</p>
+                <p><span className="font-medium">Row Data:</span></p>
+                <div className="max-h-32 overflow-y-auto text-[10px] space-y-0.5">
+                  {Object.entries(assignRow.row)
+                    .filter(([key, value]) => key !== '__assigned_to_id' && value && String(value).trim())
+                    .slice(0, 8)
+                    .map(([key, value]) => (
+                      <div key={key} className="flex">
+                        <span className="font-medium min-w-[60px] truncate">
+                          {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}:
+                        </span>
+                        <span className="ml-1 truncate">{String(value)}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Assign to *</Label>
+                <UserPicker
+                  people={allProfiles}
+                  value={taskAssigneeId}
+                  onChange={setTaskAssigneeId}
+                  placeholder="Select employee to assign task to..."
+                />
               </div>
               <div className="space-y-2">
                 <Label>Task title *</Label>
@@ -610,7 +691,7 @@ function FileWorkspacePage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
-            <Button onClick={submitAssignTask} disabled={assigning || !taskTitle}>
+            <Button onClick={submitAssignTask} disabled={assigning || !taskTitle || !taskAssigneeId}>
               {assigning ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
               Assign Task
             </Button>

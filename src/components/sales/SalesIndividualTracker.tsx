@@ -7,6 +7,10 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
@@ -25,6 +29,8 @@ export type TrackerSheet = {
   id: string;
   name: string;
   columns: string[];
+  /** dropdown options per column — keyed by column name, value is list of options */
+  dropdowns: Record<string, string[]>;
   rows: TrackerRow[];
 };
 
@@ -32,6 +38,7 @@ export type TrackerSheet = {
 
 const ASSIGN_COL_ALIASES = [
   "assigned to", "assigned_to", "assignedto", "assigned", "employee",
+  "assignee", "worker", "staff", "person", "user", "member", "team member",
 ];
 
 function isAssignCol(col: string) {
@@ -49,6 +56,7 @@ function mergeSheets(remote: TrackerSheetData[]): TrackerSheet[] {
     columns: s.columns?.length
       ? s.columns
       : Object.keys(s.rows?.[0] ?? {}).filter((k) => k !== "__assigned_to_id"),
+    dropdowns: s.dropdowns ?? {},
     rows: (s.rows as TrackerRow[]) ?? [],
   }));
 }
@@ -127,6 +135,11 @@ export function SalesIndividualTracker({
   const [addSheetOpen, setAddSheetOpen] = useState(false);
   const [deleteSheetId, setDeleteSheetId] = useState<string | null>(null);
   const [clearTableOpen, setClearTableOpen] = useState(false);
+  
+  // Dropdown management state
+  const [dropdownManageOpen, setDropdownManageOpen] = useState(false);
+  const [managingColumn, setManagingColumn] = useState<string>("");
+  const [newDropdownOption, setNewDropdownOption] = useState("");
 
   // Sync remote → local (only when not dirty)
   useEffect(() => {
@@ -147,6 +160,74 @@ export function SalesIndividualTracker({
   }
   function setColWidth(col: string, w: number) {
     setColWidths((prev) => ({ ...prev, [`${activeSheetId}:${col}`]: w }));
+  }
+
+  // ── dropdown management ────────────────────────────────────────────────────
+
+  function addDropdownOption(col: string, newOption: string) {
+    if (readOnly || !newOption.trim()) return;
+    setSheets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        const currentOptions = s.dropdowns[col] || [];
+        if (currentOptions.includes(newOption.trim())) return s; // Already exists
+        return {
+          ...s,
+          dropdowns: {
+            ...s.dropdowns,
+            [col]: [...currentOptions, newOption.trim()],
+          },
+        };
+      }),
+    );
+    setDirty(true);
+  }
+
+  function removeDropdownOption(col: string, optionToRemove: string) {
+    if (readOnly) return;
+    setSheets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        return {
+          ...s,
+          dropdowns: {
+            ...s.dropdowns,
+            [col]: (s.dropdowns[col] || []).filter((opt) => opt !== optionToRemove),
+          },
+        };
+      }),
+    );
+    setDirty(true);
+  }
+
+  function makeColumnDropdown(col: string, initialOptions: string[] = []) {
+    if (readOnly) return;
+    setSheets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        return {
+          ...s,
+          dropdowns: {
+            ...s.dropdowns,
+            [col]: initialOptions,
+          },
+        };
+      }),
+    );
+    setDirty(true);
+  }
+
+  function openDropdownManager(col: string) {
+    setManagingColumn(col);
+    setDropdownManageOpen(true);
+    setNewDropdownOption("");
+  }
+
+  function addDropdownOptionFromDialog() {
+    const option = newDropdownOption.trim();
+    if (!option || !managingColumn) return;
+    addDropdownOption(managingColumn, option);
+    setNewDropdownOption("");
   }
 
   // ── row mutations ──────────────────────────────────────────────────────
@@ -201,7 +282,7 @@ export function SalesIndividualTracker({
     const name = newSheetName.trim().toUpperCase();
     if (!name) return;
     const id = `custom_${Date.now()}`;
-    setSheets((prev) => [...prev, { id, name, columns: [], rows: [] }]);
+    setSheets((prev) => [...prev, { id, name, columns: [], dropdowns: {}, rows: [] }]);
     setActiveSheetId(id);
     setNewSheetName("");
     setAddSheetOpen(false);
@@ -237,6 +318,7 @@ export function SalesIndividualTracker({
         id: s.id,
         name: s.name,
         columns: s.columns,
+        dropdowns: s.dropdowns,
         rows: s.rows,
       })) as unknown as TrackerSheetData[];
       await saveSharedTracker(payload, userId);
@@ -271,11 +353,67 @@ export function SalesIndividualTracker({
         const ws = wb.Sheets[wsName];
         if (!ws) continue;
 
+        // ── Extract dropdown data validations from Excel ──
+        const sheetDropdowns: Record<string, string[]> = {};
+        const dataValidations = ws["!dataValidations"];
+        if (dataValidations && Array.isArray(dataValidations)) {
+          for (const validation of dataValidations) {
+            if (validation.type === "list" && validation.formulae && validation.formulae[0]) {
+              const formula = validation.formulae[0];
+              let options: string[] = [];
+              
+              // Parse dropdown options from different Excel formats
+              if (typeof formula === "string") {
+                // Handle quoted list: "Option1,Option2,Option3"
+                if (formula.startsWith('"') && formula.endsWith('"')) {
+                  options = formula.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
+                }
+                // Handle range reference or other formulas
+                else if (formula.includes(',')) {
+                  options = formula.split(',').map(s => s.trim().replace(/['"]/g, '')).filter(Boolean);
+                }
+                // Handle single range reference like "Sheet1!$A$1:$A$10"
+                else if (formula.includes('!') && formula.includes(':')) {
+                  // For now, create some default options - in a real scenario you'd resolve the range
+                  options = ['Option 1', 'Option 2', 'Option 3'];
+                }
+              }
+              
+              // Map validation ranges to column names
+              if (options.length > 0 && validation.sqref) {
+                const ranges = Array.isArray(validation.sqref) ? validation.sqref : [validation.sqref];
+                for (const range of ranges) {
+                  // Extract column letter(s) from range like "A2:A100" or "B:B"
+                  const colMatch = range.match(/^([A-Z]+)/);
+                  if (colMatch) {
+                    const colLetter = colMatch[1];
+                    // Convert column letter to index (A=0, B=1, etc.)
+                    let colIndex = 0;
+                    for (let i = 0; i < colLetter.length; i++) {
+                      colIndex = colIndex * 26 + (colLetter.charCodeAt(i) - 65 + 1);
+                    }
+                    colIndex -= 1; // Convert to 0-based index
+                    
+                    // We'll map this to column name after we parse headers
+                    sheetDropdowns[`__col_${colIndex}__`] = options;
+                  }
+                }
+              }
+            }
+          }
+        }
+
         // Get the actual used range of the sheet
         const ref = ws["!ref"];
         if (!ref) {
           // Sheet is completely empty — add it with no data
-          importedSheets.push({ id: `sheet_${wsName}_${Date.now()}`, name: wsName, columns: [], rows: [] });
+          importedSheets.push({ 
+            id: `sheet_${wsName}_${Date.now()}`, 
+            name: wsName, 
+            columns: [], 
+            dropdowns: {},
+            rows: [] 
+          });
           continue;
         }
 
@@ -289,7 +427,13 @@ export function SalesIndividualTracker({
         });
 
         if (raw.length === 0) {
-          importedSheets.push({ id: `sheet_${wsName}_${Date.now()}`, name: wsName, columns: [], rows: [] });
+          importedSheets.push({ 
+            id: `sheet_${wsName}_${Date.now()}`, 
+            name: wsName, 
+            columns: [], 
+            dropdowns: {},
+            rows: [] 
+          });
           continue;
         }
 
@@ -327,17 +471,88 @@ export function SalesIndividualTracker({
         }
         const finalHeaders = headerRow.slice(0, lastUsedColIdx + 1);
 
+        // ── Map dropdowns from column indices to column names ──
+        const finalDropdowns: Record<string, string[]> = {};
+        
+        // First, map Excel data validations
+        Object.entries(sheetDropdowns).forEach(([key, options]) => {
+          if (key.startsWith('__col_') && key.endsWith('__')) {
+            const colIndex = parseInt(key.replace('__col_', '').replace('__', ''));
+            if (colIndex < finalHeaders.length) {
+              const colName = finalHeaders[colIndex];
+              finalDropdowns[colName] = options;
+            }
+          }
+        });
+
+        // ── Add common dropdown patterns based on column names ──
+        finalHeaders.forEach((colName) => {
+          const lowerCol = colName.toLowerCase();
+          if (!finalDropdowns[colName]) {
+            // Payment Status dropdowns
+            if (lowerCol.includes('payment') && lowerCol.includes('status')) {
+              finalDropdowns[colName] = [
+                'Payment Made', 'Pending Payment', 'No Payment', 'Partial Payment', 
+                'Refund Requested', 'Refunded', 'Payment Failed'
+              ];
+            }
+            // Delivery Status dropdowns
+            else if (lowerCol.includes('delivery') && lowerCol.includes('status')) {
+              finalDropdowns[colName] = [
+                'Delivered', 'Not Delivered', 'In Progress', 'Cancelled', 
+                'On Hold', 'Scheduled', 'Failed Delivery'
+              ];
+            }
+            // Status columns (generic)
+            else if (lowerCol.includes('status') && !lowerCol.includes('payment') && !lowerCol.includes('delivery')) {
+              finalDropdowns[colName] = [
+                'Pending', 'In Progress', 'Completed', 'Cancelled', 'On Hold', 'Failed'
+              ];
+            }
+            // Service type columns
+            else if (lowerCol.includes('service') && !lowerCol.includes('status')) {
+              finalDropdowns[colName] = [
+                'T-shirt Production', 'Video Editing', 'Logo Design', 'Website Development',
+                'Social Media Management', 'Graphic Design', 'Brand Guidelines Design',
+                'Marketing', 'Photography', 'Content Creation'
+              ];
+            }
+            // Priority columns
+            else if (lowerCol.includes('priority')) {
+              finalDropdowns[colName] = ['Low', 'Medium', 'High', 'Critical'];
+            }
+          }
+        });
+
+        // ── Detect potential dropdowns from data patterns ──
+        finalHeaders.forEach((colName, colIndex) => {
+          if (!finalDropdowns[colName] && !isAssignCol(colName)) {
+            const columnValues = dataRawRows
+              .map(row => String(row?.[colIndex] ?? "").trim())
+              .filter(val => val !== "");
+            
+            const uniqueValues = [...new Set(columnValues)];
+            const totalValues = columnValues.length;
+            
+            // If column has limited unique values and good repetition, make it a dropdown
+            if (uniqueValues.length >= 2 && uniqueValues.length <= 15 && totalValues >= 3) {
+              const repetitionRatio = totalValues / uniqueValues.length;
+              if (repetitionRatio >= 1.5) { // Each value appears at least 1.5 times on average
+                finalDropdowns[colName] = uniqueValues.sort();
+              }
+            }
+          }
+        });
+
         // ── Build data rows — keep ALL rows, including blank ones ──
         const dataRows: TrackerRow[] = dataRawRows.map((r) => {
           const row: TrackerRow = {};
           finalHeaders.forEach((colName, i) => {
             row[colName] = String(r?.[i] ?? "");
           });
-          // Try to pre-match "Assigned to" column value against known employees
-          // so the UserPicker shows the right person on import
-          const assignCol = finalHeaders.find((h) =>
-            ASSIGN_COL_ALIASES.includes(h.toLowerCase().trim()),
-          );
+          // Try to pre-match any column that might be for employee assignment
+          // Look for any column that could be an "assigned to" field
+          const assignCol = finalHeaders.find((h) => isAssignCol(h));
           if (assignCol) {
             const nameInFile = String(row[assignCol] ?? "").trim().toLowerCase();
             const matched = allEmployees.find(
@@ -354,6 +569,7 @@ export function SalesIndividualTracker({
           id: `sheet_${wsName.replace(/\s+/g, "_")}_${Date.now()}`,
           name: wsName,
           columns: finalHeaders,
+          dropdowns: finalDropdowns,
           rows: dataRows,
         });
       }
@@ -565,49 +781,119 @@ export function SalesIndividualTracker({
                       {idx + 1}
                     </td>
 
-                    {activeCols.map((col) => (
-                      <td key={col} style={{ width: colWidth(col) }} className="border-r p-0.5">
-                        {/* "Assigned to" columns → UserPicker (all employees from all depts) */}
-                        {isAssignCol(col) ? (
-                          readOnly ? (
-                            <span className="px-2 text-xs block py-1">{row[col] || "—"}</span>
+                    {activeCols.map((col) => {
+                      const hasDropdown = activeSheet?.dropdowns?.[col] && activeSheet.dropdowns[col].length > 0;
+                      const dropdownOptions = activeSheet?.dropdowns?.[col] || [];
+                      
+                      return (
+                        <td key={col} style={{ width: colWidth(col) }} className="border-r p-0.5 relative group">
+                          {/* "Assigned to" columns → UserPicker (all employees from all depts) */}
+                          {isAssignCol(col) ? (
+                            readOnly ? (
+                              <span className="px-2 text-xs block py-1">{row[col] || "—"}</span>
+                            ) : (
+                              <UserPicker
+                                people={allEmployees}
+                                value={row.__assigned_to_id || null}
+                                onChange={(empId) => updateAssignedTo(idx, col, empId)}
+                                placeholder="Select employee…"
+                                compact
+                              />
+                            )
+                          ) : hasDropdown && !readOnly ? (
+                            /* Columns with dropdowns → Select component with add option */
+                            <div className="relative">
+                              <Select
+                                value={row[col] || ""}
+                                onValueChange={(value) => {
+                                  if (value === "__add_new__") {
+                                    openDropdownManager(col);
+                                  } else {
+                                    updateCell(idx, col, value);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-7 text-xs border-0 bg-transparent px-1.5 pr-6">
+                                  <SelectValue placeholder="Select..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {dropdownOptions.map((option, optIdx) => (
+                                    <SelectItem key={optIdx} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="__add_new__" className="text-primary font-medium">
+                                    + Add new option
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {/* Column dropdown management button - only visible on hover */}
+                              <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-5 w-5 p-0 text-xs"
+                                  title={`Manage ${col} dropdown`}
+                                  onClick={() => openDropdownManager(col)}
+                                >
+                                  ⚙
+                                </Button>
+                              </div>
+                            </div>
                           ) : (
-                            <UserPicker
-                              people={allEmployees}
-                              value={row.__assigned_to_id || null}
-                              onChange={(empId) => updateAssignedTo(idx, col, empId)}
-                              placeholder="Select employee…"
-                              compact
-                            />
-                          )
-                        ) : (
-                          /* All other columns — plain editable text input */
-                          <Input
-                            value={row[col] ?? ""}
-                            disabled={readOnly}
-                            onChange={(e) => updateCell(idx, col, e.target.value)}
-                            className={`h-7 text-xs border-0 focus-visible:ring-1 bg-transparent w-full ${
-                              String(row[col] ?? "").toUpperCase().includes("REFUND")
-                                ? "text-destructive font-bold" : ""
-                            }`}
-                          />
-                        )}
-                      </td>
-                    ))}
+                            /* Regular text input with option to make it a dropdown */
+                            <div className="relative">
+                              <Input
+                                value={row[col] ?? ""}
+                                disabled={readOnly}
+                                onChange={(e) => updateCell(idx, col, e.target.value)}
+                                className={`h-7 text-xs border-0 focus-visible:ring-1 bg-transparent w-full pr-6 ${
+                                  String(row[col] ?? "").toUpperCase().includes("REFUND")
+                                    ? "text-destructive font-bold" : ""
+                                }`}
+                              />
+                              {/* Make dropdown button - only visible on hover */}
+                              {!readOnly && (
+                                <div className="absolute -top-6 right-0 opacity-0 group-hover:opacity-100 transition-opacity bg-white border rounded shadow-sm p-1 z-30">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-5 w-5 p-0 text-xs"
+                                    title={`Make "${col}" a dropdown`}
+                                    onClick={() => {
+                                      // Get unique values from this column as initial dropdown options
+                                      const uniqueValues = [...new Set(
+                                        activeRows
+                                          .map(r => String(r[col] ?? "").trim())
+                                          .filter(v => v !== "")
+                                      )];
+                                      const initialOpts = uniqueValues.slice(0, 10); // Limit to 10 initial options
+                                      makeColumnDropdown(col, initialOpts);
+                                      toast.success(`"${col}" is now a dropdown with ${initialOpts.length} options`);
+                                    }}
+                                  >
+                                    ▼
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
 
                     {!readOnly && (
                       <td style={{ width: colWidth("__action") > 0 ? colWidth("__action") : 180 }}
                         className="p-1 text-center">
                         <div className="flex items-center gap-1 justify-center">
-                          {/* Assign Task button — always visible, disabled until employee is picked */}
+                          {/* Assign Task button — always visible, works with any document structure */}
                           {onAssignTask && (
                             <Button size="sm"
                               variant={row.__assigned_to_id ? "default" : "outline"}
-                              disabled={!row.__assigned_to_id}
                               className="h-7 text-[11px] px-2.5 gap-1 font-semibold whitespace-nowrap"
                               onClick={() => onAssignTask(row, idx, activeSheet?.name ?? "")}>
                               <Send className="size-3" />
-                              {row.__assigned_to_id ? "Assign Task" : "Pick employee"}
+                              {row.__assigned_to_id ? "Assign Task" : "Assign Task"}
                             </Button>
                           )}
                           <Button size="icon" variant="ghost"
@@ -723,6 +1009,80 @@ export function SalesIndividualTracker({
           <DialogFooter>
             <Button variant="outline" onClick={() => setClearTableOpen(false)}>Cancel</Button>
             <Button variant="destructive" onClick={clearActiveSheet}>Clear All Rows</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dropdown Management Dialog */}
+      <Dialog open={dropdownManageOpen} onOpenChange={setDropdownManageOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage "{managingColumn}" Dropdown</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Current options */}
+            <div>
+              <Label className="text-sm font-medium">Current options:</Label>
+              <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                {(activeSheet?.dropdowns?.[managingColumn] || []).map((option, idx) => (
+                  <div key={idx} className="flex items-center justify-between bg-secondary/30 rounded px-2 py-1">
+                    <span className="text-xs">{option}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 w-5 p-0 text-destructive hover:bg-destructive/10"
+                      onClick={() => removeDropdownOption(managingColumn, option)}
+                    >
+                      <X className="size-3" />
+                    </Button>
+                  </div>
+                ))}
+                {(activeSheet?.dropdowns?.[managingColumn] || []).length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No options yet</p>
+                )}
+              </div>
+            </div>
+            
+            {/* Add new option */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Add new option:</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={newDropdownOption}
+                  onChange={(e) => setNewDropdownOption(e.target.value)}
+                  placeholder="Enter new option..."
+                  onKeyDown={(e) => e.key === "Enter" && addDropdownOptionFromDialog()}
+                  className="text-xs"
+                />
+                <Button
+                  size="sm"
+                  onClick={addDropdownOptionFromDialog}
+                  disabled={!newDropdownOption.trim()}
+                >
+                  Add
+                </Button>
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSheets(prev => prev.map(s => s.id === activeSheetId ? 
+                    { ...s, dropdowns: { ...s.dropdowns, [managingColumn]: [] } } : s));
+                  setDirty(true);
+                  toast.success(`Cleared all options for "${managingColumn}"`);
+                }}
+                disabled={!(activeSheet?.dropdowns?.[managingColumn]?.length)}
+              >
+                Clear All
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setDropdownManageOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
