@@ -17,6 +17,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import * as XLSX from "xlsx";
 import {
   Select,
   SelectContent,
@@ -491,7 +492,6 @@ export function SalesIndividualTracker({
     if (!file) return;
     setImporting(true);
     try {
-      const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
 
       // dense:true keeps empty cells; cellDates converts dates properly
@@ -734,8 +734,15 @@ export function SalesIndividualTracker({
           }
         });
 
-        // ── Build data rows — keep ALL rows, including blank ones ──
-        const dataRows: TrackerRow[] = dataRawRows.map((r) => {
+        // ── Build data rows — SKIP completely empty rows ──
+        // A row is considered empty if ALL its visible cells (finalHeaders columns) are blank.
+        const isRowEmpty = (r: any[]) =>
+          finalHeaders.every((_, i) => String(r?.[i] ?? "").trim() === "");
+
+        const nonEmptyDataRows = dataRawRows.filter((r) => !isRowEmpty(r));
+        const skippedEmptyCount = dataRawRows.length - nonEmptyDataRows.length;
+
+        const dataRows: TrackerRow[] = nonEmptyDataRows.map((r) => {
           const row: TrackerRow = {};
           finalHeaders.forEach((colName, i) => {
             row[colName] = String(r?.[i] ?? "");
@@ -754,6 +761,12 @@ export function SalesIndividualTracker({
           }
           return row;
         });
+
+        if (skippedEmptyCount > 0) {
+          toast.message(
+            `Skipped ${skippedEmptyCount} empty row${skippedEmptyCount !== 1 ? "s" : ""} from "${wsName}"`
+          );
+        }
 
         importedSheets.push({
           id: `sheet_${wsName.replace(/\s+/g, "_")}_${Date.now()}`,
@@ -861,7 +874,6 @@ export function SalesIndividualTracker({
       return;
     }
     try {
-      const XLSX = await import("xlsx");
       const data = [activeCols, ...activeRows.map((r) => activeCols.map((c) => r[c] ?? ""))];
       const ws = XLSX.utils.aoa_to_sheet(data);
       ws["!cols"] = activeCols.map((_, ci) => ({

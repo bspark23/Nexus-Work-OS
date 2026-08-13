@@ -20,6 +20,8 @@ export const EMPTY_JOB: ExtractedJob = {
   notes: "",
 };
 
+import * as XLSX from "xlsx";
+
 const FIELD_HINTS: Record<keyof ExtractedJob, string[]> = {
   customer_name: ["customer", "client name", "client", "contact name", "name"],
   company_name: ["company", "organisation", "organization", "business"],
@@ -71,7 +73,6 @@ export type ParsedFile = {
 };
 
 async function parseSheet(file: File): Promise<ParsedFile> {
-  const XLSX = await import("xlsx");
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
   const first = workbook.SheetNames[0];
