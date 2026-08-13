@@ -155,9 +155,9 @@ function CompanyReports() {
             <div>iBrand <span style="color:#f7a03c;">Africa™</span></div>
           </div>
           <div class="title">
-            <div>DESIGNERS' WEEKLY</div>
-            <div>PERFORMANCE</div>
-            <div>REPORT FORM</div>
+            <div>${safe(report.report_banner_line1 || "DESIGNERS' WEEKLY")}</div>
+            <div>${safe(report.report_banner_line2 || "PERFORMANCE")}</div>
+            <div>${safe(report.report_banner_line3 || "REPORT FORM")}</div>
           </div>
         </div>
 

@@ -1,6 +1,18 @@
 import { useState, useMemo, useRef } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { FileText, Plus, Search, SlidersHorizontal, Trash2, Eye, Upload, Paperclip, Download, Link2, ExternalLink } from "lucide-react";
+import {
+  FileText,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Eye,
+  Upload,
+  Paperclip,
+  Download,
+  Link2,
+  ExternalLink,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/common/PageHeader";
@@ -10,10 +22,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useScope } from "@/hooks/useScope";
@@ -39,9 +59,15 @@ export const Route = createFileRoute("/_authenticated/reports")({
 const MAX_REPORT_FILE = 900 * 1024; // 900 KB
 
 const emptyProjectRow: ReportProjectRow = {
-  s_no: "", brand_name: "", project_type: "",
-  date_received: "", received_from: "", time_received: "",
-  date_delivered: "", delivered_to: "", time_delivered: "",
+  s_no: "",
+  brand_name: "",
+  project_type: "",
+  date_received: "",
+  received_from: "",
+  time_received: "",
+  date_delivered: "",
+  delivered_to: "",
+  time_delivered: "",
 };
 
 // 12 empty rows as default — same as sample image
@@ -51,11 +77,18 @@ const defaultProjects: ReportProjectRow[] = Array.from({ length: 12 }, (_, i) =>
 }));
 
 const empty: Partial<Report> = {
-  title: "", report_type: "daily", status: "submitted",
+  title: "",
+  report_type: "daily",
+  status: "submitted",
   report_date: new Date().toISOString().slice(0, 10),
-  attached_file: null, attached_file_name: null,
-  report_link: null, report_link_label: null,
+  attached_file: null,
+  attached_file_name: null,
+  report_link: null,
+  report_link_label: null,
   // iBrand structured fields default empty
+  report_banner_line1: "DESIGNERS' WEEKLY",
+  report_banner_line2: "PERFORMANCE",
+  report_banner_line3: "REPORT FORM",
   report_employee_name: null,
   report_designation: null,
   report_week_ending: new Date().toISOString().slice(0, 10),
@@ -74,7 +107,11 @@ const empty: Partial<Report> = {
   supervisor_remark: null,
   supervisor_sign_date: null,
   // Also keep old fields for backwards compat
-  summary: null, completed_work: null, challenges: null, achievements: null, next_steps: null,
+  summary: null,
+  completed_work: null,
+  challenges: null,
+  achievements: null,
+  next_steps: null,
 };
 
 function ReportsPage() {
@@ -120,14 +157,21 @@ function ReportsPage() {
       toast.success(`"${file.name}" attached`);
       setUploadingFile(false);
     };
-    reader.onerror = () => { toast.error("Could not read file"); setUploadingFile(false); };
+    reader.onerror = () => {
+      toast.error("Could not read file");
+      setUploadingFile(false);
+    };
     reader.readAsDataURL(file);
   }
 
   const filtered = useMemo(() => {
     return reports.filter((r) => {
-      if (search && !r.title.toLowerCase().includes(search.toLowerCase()) &&
-          !(r.summary ?? "").toLowerCase().includes(search.toLowerCase())) return false;
+      if (
+        search &&
+        !r.title.toLowerCase().includes(search.toLowerCase()) &&
+        !(r.summary ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+        return false;
       if (filterType !== "all" && r.report_type !== filterType) return false;
       if (filterStatus !== "all" && r.status !== filterStatus) return false;
       if (filterDept !== "all" && r.department_id !== filterDept) return false;
@@ -147,20 +191,29 @@ function ReportsPage() {
     try {
       // Build document by copying our existing styled report element by using the view component's content
       // Simpler approach: inject HTML with the same table structure
-      const author = authorName || allProfiles.find((p) => p.id === report.author_id)?.full_name || "Unknown";
+      const author =
+        authorName || allProfiles.find((p) => p.id === report.author_id)?.full_name || "Unknown";
       const dept = deptName || departments.find((d) => d.id === report.department_id)?.name || "—";
       const projects = report.report_projects ?? [];
       const rating: Record<string, string> = {
-        excellent: "Excellent", good: "Good", fair: "Fair", sum_optimal: "Sum-optimal", poor: "Poor",
+        excellent: "Excellent",
+        good: "Good",
+        fair: "Fair",
+        sum_optimal: "Sum-optimal",
+        poor: "Poor",
       };
 
-      const safe = (s: unknown) => String(s ?? "")
-        .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+      const safe = (s: unknown) =>
+        String(s ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
 
       const ratingCell = (val: string | null) => {
         const v = val ?? "";
-        return ROW_RATINGS.map((o) =>
-          `<span style="border:1px solid #ccc;border-radius:4px;padding:4px 10px;margin-right:6px;display:inline-block;min-width:100px;text-align:center;${v === o.value ? "background:#0a1f3d;color:#fff;font-weight:600;" : ""}">${o.label}</span>`
+        return ROW_RATINGS.map(
+          (o) =>
+            `<span style="border:1px solid #ccc;border-radius:4px;padding:4px 10px;margin-right:6px;display:inline-block;min-width:100px;text-align:center;${v === o.value ? "background:#0a1f3d;color:#fff;font-weight:600;" : ""}">${o.label}</span>`,
         ).join("");
       };
 
@@ -188,8 +241,10 @@ function ReportsPage() {
         </tr>`;
       }).join("");
 
-      const spacerRows = Array.from({ length: 3 }, () =>
-        `<tr style="border-bottom:1px solid #ddd;height:34px;"><td style="border-right:1px solid #ddd;background:#f9fafb;"></td><td colspan="5"></td></tr>`
+      const spacerRows = Array.from(
+        { length: 3 },
+        () =>
+          `<tr style="border-bottom:1px solid #ddd;height:34px;"><td style="border-right:1px solid #ddd;background:#f9fafb;"></td><td colspan="5"></td></tr>`,
       ).join("");
 
       const html = `<!doctype html><html><head><meta charset="utf-8"><title>Weekly Performance Report — ${safe(author)}</title>
@@ -229,9 +284,9 @@ function ReportsPage() {
             <div>iBrand <span style="color:#f7a03c;">Africa™</span></div>
           </div>
           <div class="title">
-            <div>DESIGNERS' WEEKLY</div>
-            <div>PERFORMANCE</div>
-            <div>REPORT FORM</div>
+            <div>${safe(report.report_banner_line1 || "DESIGNERS' WEEKLY")}</div>
+            <div>${safe(report.report_banner_line2 || "PERFORMANCE")}</div>
+            <div>${safe(report.report_banner_line3 || "REPORT FORM")}</div>
           </div>
         </div>
 
@@ -322,21 +377,29 @@ function ReportsPage() {
           </table>
         </div>
 
-        ${report.report_link ? `
+        ${
+          report.report_link
+            ? `
           <div style="margin-top:16px; padding:14px; border:1px solid #0ea5e9; background:#f0f9ff; border-radius:10px;">
             <div style="font-weight:600;margin-bottom:6px;color:#0369a1;">🔗 Reference Link</div>
             <a class="link" href="${safe(report.report_link)}" target="_blank" rel="noopener">
               🔗 ${safe(report.report_link_label || report.report_link)}
             </a>
-          </div>` : ""}
+          </div>`
+            : ""
+        }
 
-        ${report.attached_file_name ? `
+        ${
+          report.attached_file_name
+            ? `
           <div style="margin-top:10px; padding:14px; border:1px solid #cbd5e1; background:#f8fafc; border-radius:10px;">
             <div style="font-weight:600;margin-bottom:6px;">📎 Attached File</div>
             <a class="link" href="${safe(report.attached_file!)}" download="${safe(report.attached_file_name!)}" style="border-color:#94a3b8;background:#f8fafc;color:#334155;">
               📎 ${safe(report.attached_file_name)}
             </a>
-          </div>` : ""}
+          </div>`
+            : ""
+        }
 
         <div class="foot" style="margin-top:22px;padding-top:10px;border-top:1px solid #e2e8f0;text-align:center;color:#94a3b8;font-size:10px;">
           iBrand Africa — Designers' Weekly Performance Report Form · Generated ${new Date().toLocaleString()}
@@ -366,7 +429,9 @@ function ReportsPage() {
         await exportReport(r, author, dept);
         if (i < list.length - 1) await new Promise((res) => setTimeout(res, 400));
       }
-      toast.success(`Exported ${list.length} report${list.length !== 1 ? "s" : ""} — each opened in a new tab (Print → Save as PDF)`);
+      toast.success(
+        `Exported ${list.length} report${list.length !== 1 ? "s" : ""} — each opened in a new tab (Print → Save as PDF)`,
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Export failed");
     } finally {
@@ -391,7 +456,9 @@ function ReportsPage() {
         : draft.report_employee_name
           ? `Performance Report — ${draft.report_employee_name}`
           : `Report: ${formatDate(draft.report_date ?? new Date().toISOString().slice(0, 10))}`;
-    const finalTitle = draft.title?.trim() || (draft.attached_file_name ? `Report: ${draft.attached_file_name}` : autoTitle);
+    const finalTitle =
+      draft.title?.trim() ||
+      (draft.attached_file_name ? `Report: ${draft.attached_file_name}` : autoTitle);
     const id = await saveReport({
       ...(draft as Report),
       title: finalTitle,
@@ -438,9 +505,11 @@ function ReportsPage() {
       <PageHeader
         title={isAdmin ? "All Reports" : isDeptAdmin ? "Department Reports" : "My Reports"}
         subtitle={
-          isAdmin ? "Every report submitted across the company."
-          : isDeptAdmin ? "Reports from your department."
-          : "Your daily, weekly and monthly reports."
+          isAdmin
+            ? "Every report submitted across the company."
+            : isDeptAdmin
+              ? "Reports from your department."
+              : "Your daily, weekly and monthly reports."
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -456,7 +525,12 @@ function ReportsPage() {
                 {exporting ? "Exporting…" : `Export ${filtered.length}`}
               </Button>
             )}
-            <Button onClick={() => { setDraft({ ...empty }); setOpen(true); }}>
+            <Button
+              onClick={() => {
+                setDraft({ ...empty });
+                setOpen(true);
+              }}
+            >
               <Plus className="size-4" /> New report
             </Button>
           </div>
@@ -469,46 +543,91 @@ function ReportsPage() {
           <SlidersHorizontal className="text-muted-foreground size-4 shrink-0" />
           <div className="relative flex-1 min-w-[160px]">
             <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-            <Input className="pl-9" placeholder="Search reports…" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input
+              className="pl-9"
+              placeholder="Search reports…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[150px]"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectTrigger className="w-[150px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
-              {REPORT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              {REPORT_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
-              {REPORT_STATUSES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              {REPORT_STATUSES.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {canManage && (
             <Select value={filterDept} onValueChange={setFilterDept}>
-              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Department" /></SelectTrigger>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All departments</SelectItem>
-                {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                {departments.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
           {canManage && (
             <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-              <SelectTrigger className="w-[170px]"><SelectValue placeholder="Employee" /></SelectTrigger>
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="Employee" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All employees</SelectItem>
-                {allProfiles.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
+                {allProfiles.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.full_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           )}
-          {(search || filterType !== "all" || filterStatus !== "all" || filterDept !== "all" || filterEmployee !== "all") && (
-            <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilterType("all"); setFilterStatus("all"); setFilterDept("all"); setFilterEmployee("all"); }}>
+          {(search ||
+            filterType !== "all" ||
+            filterStatus !== "all" ||
+            filterDept !== "all" ||
+            filterEmployee !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearch("");
+                setFilterType("all");
+                setFilterStatus("all");
+                setFilterDept("all");
+                setFilterEmployee("all");
+              }}
+            >
               Clear
             </Button>
           )}
-          <span className="text-muted-foreground ml-auto text-xs">{filtered.length} result{filtered.length !== 1 ? "s" : ""}</span>
+          <span className="text-muted-foreground ml-auto text-xs">
+            {filtered.length} result{filtered.length !== 1 ? "s" : ""}
+          </span>
         </div>
       )}
 
@@ -516,12 +635,21 @@ function ReportsPage() {
         <EmptyState
           icon={<FileText className="size-6" />}
           title={reports.length === 0 ? "No reports yet" : "No reports match your filters"}
-          description={reports.length === 0 ? "Submit your first daily report." : "Try adjusting the filters."}
-          action={reports.length === 0 ? (
-            <Button onClick={() => { setDraft({ ...empty }); setOpen(true); }}>
-              <Plus className="size-4" /> New report
-            </Button>
-          ) : undefined}
+          description={
+            reports.length === 0 ? "Submit your first daily report." : "Try adjusting the filters."
+          }
+          action={
+            reports.length === 0 ? (
+              <Button
+                onClick={() => {
+                  setDraft({ ...empty });
+                  setOpen(true);
+                }}
+              >
+                <Plus className="size-4" /> New report
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -545,7 +673,12 @@ function ReportsPage() {
                     {/* Show a couple of iBrand structured details as preview */}
                     {(r.report_employee_name || r.report_week_ending) && (
                       <p className="text-muted-foreground text-[11px] mt-0.5">
-                        {r.report_employee_name && <>👤 {r.report_employee_name}{r.report_week_ending && " · "}</>}
+                        {r.report_employee_name && (
+                          <>
+                            👤 {r.report_employee_name}
+                            {r.report_week_ending && " · "}
+                          </>
+                        )}
                         {r.report_week_ending && <>📅 Week ending {r.report_week_ending}</>}
                       </p>
                     )}
@@ -603,7 +736,9 @@ function ReportsPage() {
                     className="flex items-center gap-2 rounded-lg border bg-secondary/40 px-3 py-2 text-xs hover:bg-secondary transition-colors"
                   >
                     <Paperclip className="text-muted-foreground size-3.5 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate font-medium">{r.attached_file_name}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium">
+                      {r.attached_file_name}
+                    </span>
                     <Download className="text-muted-foreground size-3.5 shrink-0" />
                   </a>
                 )}
@@ -630,7 +765,10 @@ function ReportsPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => { setDraft(r); setOpen(true); }}
+                      onClick={() => {
+                        setDraft(r);
+                        setOpen(true);
+                      }}
                     >
                       Open / Edit
                     </Button>
@@ -640,7 +778,10 @@ function ReportsPage() {
                     <Button
                       size="sm"
                       variant={isOwner ? "ghost" : "outline"}
-                      onClick={() => { setViewReport(r); setViewOpen(true); }}
+                      onClick={() => {
+                        setViewReport(r);
+                        setViewOpen(true);
+                      }}
                     >
                       <Eye className="size-4" /> {isOwner ? "Preview" : "Read report"}
                     </Button>
@@ -669,18 +810,32 @@ function ReportsPage() {
         <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-5xl p-0">
           <div className="sticky top-0 z-20 border-b bg-background px-6 py-3.5 flex items-start justify-between gap-3">
             <DialogHeader>
-              <DialogTitle>{draft.id ? "Edit Report" : "New Weekly Performance Report"}</DialogTitle>
+              <DialogTitle>
+                {draft.id ? "Edit Report" : "New Weekly Performance Report"}
+              </DialogTitle>
               <p className="text-muted-foreground text-xs mt-1">
-                Fill in the iBrand Africa form below. Upload file and Reference link sections appear at the end.
+                Fill in the iBrand Africa form below. Upload file and Reference link sections appear
+                at the end.
               </p>
             </DialogHeader>
             {/* Report type selector — kept as requested */}
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 <Label className="text-xs shrink-0">Report type</Label>
-                <Select value={draft.report_type ?? "daily"} onValueChange={(v) => setDraft({ ...draft, report_type: v })}>
-                  <SelectTrigger className="w-[130px] h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>{REPORT_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
+                <Select
+                  value={draft.report_type ?? "daily"}
+                  onValueChange={(v) => setDraft({ ...draft, report_type: v })}
+                >
+                  <SelectTrigger className="w-[130px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REPORT_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
                 </Select>
               </div>
             </div>
@@ -691,14 +846,17 @@ function ReportsPage() {
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <Label className="text-xs shrink-0">Report date</Label>
-                <Input type="date" className="w-[170px] h-9 text-xs"
+                <Input
+                  type="date"
+                  className="w-[170px] h-9 text-xs"
                   value={draft.report_date ?? ""}
                   onChange={(e) => setDraft({ ...draft, report_date: e.target.value })}
                 />
               </div>
               <div className="flex items-center gap-2 flex-1 min-w-[240px]">
                 <Label className="text-xs shrink-0">Report title (auto)</Label>
-                <Input className="h-9 text-xs"
+                <Input
+                  className="h-9 text-xs"
                   value={draft.title ?? ""}
                   placeholder="Leave blank to auto-generate from name + week ending"
                   onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -712,14 +870,27 @@ function ReportsPage() {
               onChange={(updates) => setDraft((prev) => ({ ...prev, ...updates }))}
               uploadingFile={uploadingFile}
               onFileSelect={handleReportFileChange}
-              onRemoveFile={() => setDraft((d) => ({ ...d, attached_file: null, attached_file_name: null }))}
+              onRemoveFile={() =>
+                setDraft((d) => ({ ...d, attached_file: null, attached_file_name: null }))
+              }
               fileInputRef={fileInputRef}
             />
           </div>
 
           <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submit} disabled={!!(draft.report_projects && draft.report_projects.length === 0 && !draft.attached_file)}>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submit}
+              disabled={
+                !!(
+                  draft.report_projects &&
+                  draft.report_projects.length === 0 &&
+                  !draft.attached_file
+                )
+              }
+            >
               {draft.id ? "Save changes" : "Submit report"}
             </Button>
           </DialogFooter>
@@ -737,14 +908,20 @@ function ReportsPage() {
                 <DialogHeader>
                   <DialogTitle className="text-lg">{viewReport.title}</DialogTitle>
                   <p className="text-muted-foreground text-xs mt-1">
-                    {labelOf(REPORT_TYPES, viewReport.report_type)} · {formatDate(viewReport.report_date)} ·{" "}
-                    {allProfiles.find((p) => p.id === viewReport.author_id)?.full_name ?? "Unknown"} ·{" "}
+                    {labelOf(REPORT_TYPES, viewReport.report_type)} ·{" "}
+                    {formatDate(viewReport.report_date)} ·{" "}
+                    {allProfiles.find((p) => p.id === viewReport.author_id)?.full_name ?? "Unknown"}{" "}
+                    ·{" "}
                     {departments.find((d) => d.id === viewReport.department_id)?.name ?? "No dept"}
                   </p>
                 </DialogHeader>
                 <div className="flex flex-wrap gap-2 shrink-0">
-                  <Button variant="outline" size="sm" className="gap-1.5 h-9"
-                    onClick={() => exportReport(viewReport)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 h-9"
+                    onClick={() => exportReport(viewReport)}
+                  >
                     <Download className="size-4" /> Export PDF
                   </Button>
                   {isAdmin && (
@@ -761,15 +938,19 @@ function ReportsPage() {
                       <Trash2 className="size-4" /> Delete
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" className="h-9" onClick={() => setViewOpen(false)}>Close</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={() => setViewOpen(false)}
+                  >
+                    Close
+                  </Button>
                 </div>
               </div>
 
               <div className="px-6 py-5">
-                <WeeklyPerformanceReport
-                  readOnly={true}
-                  data={viewReport}
-                />
+                <WeeklyPerformanceReport readOnly={true} data={viewReport} />
               </div>
             </>
           )}

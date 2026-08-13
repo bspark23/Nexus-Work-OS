@@ -106,6 +106,10 @@ export type Report = {
   attached_file: string | null;
   attached_file_name: string | null;
   // ── iBrand Weekly Performance Report structured fields ────────────
+  // BANNER HEADER TITLE (editable)
+  report_banner_line1: string | null;
+  report_banner_line2: string | null;
+  report_banner_line3: string | null;
   // INDIVIDUAL INFORMATION
   report_employee_name: string | null;
   report_designation: string | null;
