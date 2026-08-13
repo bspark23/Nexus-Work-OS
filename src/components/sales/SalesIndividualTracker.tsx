@@ -313,20 +313,22 @@ export function SalesIndividualTracker({
 
   function addDropdownOption(col: string, newOption: string) {
     if (readOnly || !newOption.trim()) return;
-    setSheets((prev) =>
-      prev.map((s) => {
+    setSheets((prev) => {
+      const targetSheet = prev.find((s) => s.id === activeSheetId);
+      if (!targetSheet) return prev;
+      const currentOptions = targetSheet.dropdowns[col] || [];
+      if (currentOptions.includes(newOption.trim())) return prev;
+      return prev.map((s) => {
         if (s.id !== activeSheetId) return s;
-        const currentOptions = s.dropdowns[col] || [];
-        if (currentOptions.includes(newOption.trim())) return s; // Already exists
         return {
           ...s,
           dropdowns: {
             ...s.dropdowns,
-            [col]: [...currentOptions, newOption.trim()],
+            [col]: [...(s.dropdowns[col] || []), newOption.trim()],
           },
         };
-      }),
-    );
+      });
+    });
     setDirty(true);
   }
 
@@ -381,14 +383,17 @@ export function SalesIndividualTracker({
 
   function updateCell(rowIdx: number, col: string, value: string) {
     if (readOnly) return;
-    setSheets((prev) =>
-      prev.map((s) => {
+    setSheets((prev) => {
+      return prev.map((s) => {
         if (s.id !== activeSheetId) return s;
         const rows = [...s.rows];
+        while (rows.length <= rowIdx) {
+          rows.push(emptyRow(s.columns.length > 0 ? s.columns : DEFAULT_COLUMNS));
+        }
         rows[rowIdx] = { ...rows[rowIdx], [col]: value };
         return { ...s, rows };
-      }),
-    );
+      });
+    });
     setDirty(true);
   }
 
@@ -399,6 +404,9 @@ export function SalesIndividualTracker({
       prev.map((s) => {
         if (s.id !== activeSheetId) return s;
         const rows = [...s.rows];
+        while (rows.length <= rowIdx) {
+          rows.push(emptyRow(s.columns.length > 0 ? s.columns : DEFAULT_COLUMNS));
+        }
         rows[rowIdx] = {
           ...rows[rowIdx],
           [col]: emp?.full_name ?? "",
@@ -423,9 +431,11 @@ export function SalesIndividualTracker({
 
   function addRow() {
     if (readOnly) return;
-    if (activeCols.length === 0) {
-      setSheets((prev) =>
-        prev.map((s) =>
+    setSheets((prev) => {
+      const target = prev.find((s) => s.id === activeSheetId);
+      if (!target) return prev;
+      if (target.columns.length === 0) {
+        return prev.map((s) =>
           s.id === activeSheetId
             ? {
                 ...s,
@@ -433,18 +443,18 @@ export function SalesIndividualTracker({
                 rows: [{ ...emptyRow(DEFAULT_COLUMNS) }],
               }
             : s,
-        ),
+        );
+      }
+      return prev.map((s) =>
+        s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
       );
-      toast.success(
-        `Created sheet with ${DEFAULT_COLUMNS.length} default columns — add your data!`,
-      );
-    } else {
-      setSheets((prev) =>
-        prev.map((s) =>
-          s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
-        ),
-      );
-    }
+    });
+    setTimeout(() => {
+      const scroll = tableScrollRef.current;
+      if (scroll) {
+        scroll.scrollTop = scroll.scrollHeight;
+      }
+    }, 0);
     setDirty(true);
   }
 

@@ -80,6 +80,19 @@ function FileWorkspacePage() {
   const [dirty, setDirty] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
+  // ── warn on unsaved changes ──────────────────────────────────────────────
+  useEffect(() => {
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      if (dirty) {
+        e.preventDefault();
+        e.returnValue =
+          "You have unsaved changes in the file workspace. Are you sure you want to leave?";
+      }
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
   // ── derived ───────────────────────────────────────────────────────────────
   const canAccess = isAdmin || isDeptAdmin || isSales;
 
@@ -203,23 +216,43 @@ function FileWorkspacePage() {
 
   function editCell(rowIdx: number, col: string, value: string) {
     if (!isOwner) return;
-    const base = editRows ?? activeFileData?.rows ?? [];
-    setEditRows(base.map((row, i) => (i === rowIdx ? { ...row, [col]: value } : row)));
+    setEditRows((prev) => {
+      const base = prev ?? activeFileData?.rows ?? [];
+      const safeBase = [...base];
+      while (safeBase.length <= rowIdx) {
+        safeBase.push(Object.fromEntries(columns.map((c) => [c, ""])));
+      }
+      return safeBase.map((row, i) => (i === rowIdx ? { ...row, [col]: value } : row));
+    });
     setDirty(true);
   }
 
   function addRow() {
     if (!isOwner) return;
-    const base = editRows ?? activeFileData?.rows ?? [];
-    const blank = Object.fromEntries(columns.map((c) => [c, ""]));
-    setEditRows([...base, blank]);
+    setEditRows((prev) => {
+      const base = prev ?? activeFileData?.rows ?? [];
+      const safeColumns =
+        columns.length > 0
+          ? columns
+          : (activeFileData?.columns ?? (base[0] ? Object.keys(base[0]) : ["Column_1"]));
+      const blank = Object.fromEntries(safeColumns.map((c) => [c, ""]));
+      return [...base, blank];
+    });
     setDirty(true);
+    setTimeout(() => {
+      const scroll = fwScrollRef.current;
+      if (scroll) {
+        scroll.scrollTop = scroll.scrollHeight;
+      }
+    }, 0);
   }
 
   function deleteRow(idx: number) {
     if (!isOwner) return;
-    const base = editRows ?? activeFileData?.rows ?? [];
-    setEditRows(base.filter((_, i) => i !== idx));
+    setEditRows((prev) => {
+      const base = prev ?? activeFileData?.rows ?? [];
+      return base.filter((_, i) => i !== idx);
+    });
     setDirty(true);
   }
 
@@ -264,9 +297,19 @@ function FileWorkspacePage() {
   }
 
   function switchToFile(f: SavedFile) {
+    if (dirty && selectedFileId !== f.id) {
+      if (
+        !confirm(
+          "You have unsaved changes. Save before switching, or they will be lost. Switch anyway?",
+        )
+      ) {
+        return;
+      }
+    }
     setSelectedFileId(f.id);
     setEditRows(null);
     setDirty(false);
+    setFwEditingCell(null);
   }
 
   function useForNewJob() {
