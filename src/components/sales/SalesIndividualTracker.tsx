@@ -274,10 +274,20 @@ export function SalesIndividualTracker({
   }
 
   // Focus the input when a cell enters edit mode
+  // Use a ref to track if we've already focused+positioned this editing session
+  const didFocusForEditRef = useRef<string | null>(null);
   useEffect(() => {
     if (editingCell && editInputRef.current) {
-      editInputRef.current.focus();
-      editInputRef.current.select();
+      const cellKey = `${editingCell.rowIdx}:${editingCell.col}`;
+      // Only set selection on INITIAL entry into edit mode, not on every re-render
+      if (didFocusForEditRef.current !== cellKey) {
+        didFocusForEditRef.current = cellKey;
+        editInputRef.current.focus();
+        const len = editInputRef.current.value.length;
+        editInputRef.current.setSelectionRange(len, len);
+      }
+    } else {
+      didFocusForEditRef.current = null;
     }
   }, [editingCell]);
 
@@ -400,18 +410,108 @@ export function SalesIndividualTracker({
     setDirty(true);
   }
 
+  const DEFAULT_COLUMNS = [
+    "Brand Name",
+    "Customer/Client",
+    "Contact Number",
+    "Service/Project Type",
+    "Amount (₦)",
+    "Date Confirmed",
+    "Status",
+    "Assigned To",
+  ];
+
   function addRow() {
     if (readOnly) return;
     if (activeCols.length === 0) {
-      toast.error("Import a file first to get columns");
+      setSheets((prev) =>
+        prev.map((s) =>
+          s.id === activeSheetId
+            ? {
+                ...s,
+                columns: [...DEFAULT_COLUMNS],
+                rows: [{ ...emptyRow(DEFAULT_COLUMNS) }],
+              }
+            : s,
+        ),
+      );
+      toast.success(
+        `Created sheet with ${DEFAULT_COLUMNS.length} default columns — add your data!`,
+      );
+    } else {
+      setSheets((prev) =>
+        prev.map((s) =>
+          s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
+        ),
+      );
+    }
+    setDirty(true);
+  }
+
+  const [addColOpen, setAddColOpen] = useState(false);
+  const [newColName, setNewColName] = useState("");
+
+  function addColumn() {
+    const name = newColName.trim();
+    if (!name) return;
+    setSheets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        const columns = [...s.columns, name];
+        const rows = s.rows.map((r) => ({ ...r, [name]: "" }));
+        return { ...s, columns, rows };
+      }),
+    );
+    setNewColName("");
+    setAddColOpen(false);
+    setDirty(true);
+    toast.success(`Added column "${name}"`);
+  }
+
+  function renameColumn(oldName: string, newName: string) {
+    if (!newName.trim() || newName === oldName) return;
+    setSheets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        const columns = s.columns.map((c) => (c === oldName ? newName.trim() : c));
+        const rows = s.rows.map((r) => {
+          const updated = { ...r };
+          updated[newName.trim()] = r[oldName] ?? "";
+          if (newName.trim() !== oldName) delete updated[oldName];
+          return updated;
+        });
+        const dropdowns = { ...s.dropdowns };
+        if (dropdowns[oldName]) {
+          dropdowns[newName.trim()] = dropdowns[oldName];
+          delete dropdowns[oldName];
+        }
+        return { ...s, columns, rows, dropdowns };
+      }),
+    );
+    setDirty(true);
+  }
+
+  function deleteColumn(colName: string) {
+    if (activeCols.length <= 1) {
+      toast.error("Cannot delete the last column");
       return;
     }
     setSheets((prev) =>
-      prev.map((s) =>
-        s.id === activeSheetId ? { ...s, rows: [...s.rows, emptyRow(s.columns)] } : s,
-      ),
+      prev.map((s) => {
+        if (s.id !== activeSheetId) return s;
+        const columns = s.columns.filter((c) => c !== colName);
+        const rows = s.rows.map((r) => {
+          const updated = { ...r };
+          delete updated[colName];
+          return updated;
+        });
+        const dropdowns = { ...s.dropdowns };
+        delete dropdowns[colName];
+        return { ...s, columns, rows, dropdowns };
+      }),
     );
     setDirty(true);
+    toast.success(`Removed column "${colName}"`);
   }
 
   function deleteRow(idx: number) {
@@ -764,7 +864,7 @@ export function SalesIndividualTracker({
 
         if (skippedEmptyCount > 0) {
           toast.message(
-            `Skipped ${skippedEmptyCount} empty row${skippedEmptyCount !== 1 ? "s" : ""} from "${wsName}"`
+            `Skipped ${skippedEmptyCount} empty row${skippedEmptyCount !== 1 ? "s" : ""} from "${wsName}"`,
           );
         }
 
@@ -1012,18 +1112,24 @@ export function SalesIndividualTracker({
                 <FileSpreadsheet className="size-10 opacity-30" />
                 <p className="text-sm font-medium">No data yet</p>
                 <p className="text-xs max-w-xs text-center">
-                  Click "Import Excel/CSV" to load your file. Every sheet, every row and every
-                  column will appear exactly as it is in the file.
+                  Choose either: <strong>Import Excel/CSV</strong> to load an existing file, or
+                  click <strong>Add Row</strong> below to start building from scratch.
                 </p>
                 {!readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 mt-1"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="size-3.5" /> Import your file
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="size-3.5" /> Import your file
+                    </Button>
+                    <span className="text-xs text-muted-foreground">or</span>
+                    <Button size="sm" className="gap-1.5" onClick={addRow}>
+                      <Plus className="size-3.5" /> Add Row (Start from scratch)
+                    </Button>
+                  </div>
                 )}
               </>
             )}
@@ -1197,11 +1303,6 @@ export function SalesIndividualTracker({
                                   ref={editInputRef}
                                   value={cellValue}
                                   onChange={(e) => {
-                                    setEditingCell((ec) =>
-                                      ec?.rowIdx === idx && ec?.col === col
-                                        ? { rowIdx: idx, col }
-                                        : ec,
-                                    );
                                     updateCell(idx, col, e.target.value);
                                   }}
                                   onBlur={(e) => commitEdit(col, e.target.value)}

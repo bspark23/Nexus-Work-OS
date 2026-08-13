@@ -113,10 +113,20 @@ function FileWorkspacePage() {
     return { fwStart: start, fwEnd: end };
   }, [fwScrollTop, displayRows.length, useFwVirtual]);
 
+  // Track if we've already positioned cursor for current edit cell
+  const fwDidFocusRef = useRef<string | null>(null);
   useEffect(() => {
     if (fwEditingCell && fwEditInputRef.current) {
-      fwEditInputRef.current.focus();
-      fwEditInputRef.current.select();
+      const cellKey = `${fwEditingCell.row}:${fwEditingCell.col}`;
+      if (fwDidFocusRef.current !== cellKey) {
+        fwDidFocusRef.current = cellKey;
+        fwEditInputRef.current.focus();
+        // Put cursor at the END instead of selecting all text (prevents highlighting issues)
+        const len = fwEditInputRef.current.value.length;
+        fwEditInputRef.current.setSelectionRange(len, len);
+      }
+    } else {
+      fwDidFocusRef.current = null;
     }
   }, [fwEditingCell]);
 

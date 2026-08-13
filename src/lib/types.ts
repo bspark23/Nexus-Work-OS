@@ -47,14 +47,14 @@ export type Project = {
 
 export type Task = {
   id: string;
-  owner_id: string;           // person the task is assigned TO
+  owner_id: string; // person the task is assigned TO
   assigned_to: string | null; // explicit assignee (same as owner_id)
   project_id: string | null;
   customer_job_id: string | null;
   title: string;
   description: string | null;
   priority: string;
-  status: string;             // pending | in_progress | blocked | done | expired
+  status: string; // pending | in_progress | blocked | done | expired
   progress: number;
   start_date: string | null;
   due_date: string | null;
@@ -64,10 +64,10 @@ export type Task = {
   department_id: string | null;
   notes: string | null;
   // Fields filled by the assignee when submitting completion / update
-  completion_note: string | null;   // "I have finished…"
-  completion_link: string | null;   // optional URL to deliverable
-  block_reason: string | null;      // required when status = blocked
-  review_status: string | null;     // null | "pending_review" | "approved" | "rejected"
+  completion_note: string | null; // "I have finished…"
+  completion_link: string | null; // optional URL to deliverable
+  block_reason: string | null; // required when status = blocked
+  review_status: string | null; // null | "pending_review" | "approved" | "rejected"
   reviewer_feedback: string | null; // feedback from the assigner
   created_at: string;
   updated_at: string;
@@ -83,6 +83,24 @@ export type ReportProjectRow = {
   date_delivered: string;
   delivered_to: string;
   time_delivered: string;
+};
+
+export type SalesProjectRow = {
+  s_no: string;
+  brand_name: string;
+  contact_number: string;
+  project_type: string;
+  project_value_n: string;
+  date_confirmed: string;
+  category_location: string;
+  edo: string;
+  assigned_official: string;
+};
+
+export type SalesInvoiceItem = {
+  s_no: string;
+  item: string;
+  total_cost: string;
 };
 
 export type Report = {
@@ -132,6 +150,37 @@ export type Report = {
   // SUPERVISOR
   supervisor_remark: string | null;
   supervisor_sign_date: string | null;
+  // ── Sales/CSR Weekly Performance Report fields ────────────
+  is_sales_report: boolean | null;
+  // SALES PROJECTS TABLE (different columns from regular report)
+  sales_projects: SalesProjectRow[] | null;
+  // SALES PERFORMANCE SUMMARY
+  sales_perf_number_of_projects: string | null;
+  sales_perf_total_project_value: string | null;
+  sales_perf_variance_against_target: string | null;
+  sales_perf_net_indicator: string | null;
+  sales_perf_leads_generated: string | null;
+  sales_perf_proposals_sent: string | null;
+  sales_perf_total_pending_deals: string | null;
+  sales_perf_total_completed_projects: string | null;
+  // ── Sales Invoice / Receipt section ────────────
+  invoice_company_address: string | null;
+  invoice_company_phone: string | null;
+  invoice_company_fax: string | null;
+  invoice_company_email: string | null;
+  invoice_company_website: string | null;
+  invoice_bill_to_name: string | null;
+  invoice_bill_to_address: string | null;
+  invoice_bill_to_email: string | null;
+  invoice_bill_to_phone: string | null;
+  invoice_number: string | null;
+  invoice_date: string | null;
+  invoice_items: SalesInvoiceItem[] | null;
+  invoice_total: string | null;
+  invoice_bank_account_name: string | null;
+  invoice_bank_account_number: string | null;
+  invoice_bank_name: string | null;
+  invoice_footer_note: string | null;
   created_at: string;
   updated_at: string;
 };

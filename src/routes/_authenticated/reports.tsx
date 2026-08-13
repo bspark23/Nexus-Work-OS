@@ -44,7 +44,8 @@ import { scopeReports } from "@/lib/scope";
 import { REPORT_STATUSES, REPORT_TYPES, labelOf, toneOf } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
 import { WeeklyPerformanceReport } from "@/components/common/WeeklyPerformanceReport";
-import type { Report, ReportProjectRow } from "@/lib/types";
+import { SalesPerformanceReport } from "@/components/common/SalesPerformanceReport";
+import type { Report, ReportProjectRow, SalesProjectRow, SalesInvoiceItem } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
@@ -73,6 +74,34 @@ const emptyProjectRow: ReportProjectRow = {
 // 12 empty rows as default — same as sample image
 const defaultProjects: ReportProjectRow[] = Array.from({ length: 12 }, (_, i) => ({
   ...emptyProjectRow,
+  s_no: String(i + 1),
+}));
+
+const emptySalesProjectRow: SalesProjectRow = {
+  s_no: "",
+  brand_name: "",
+  contact_number: "",
+  project_type: "",
+  project_value_n: "",
+  date_confirmed: "",
+  category_location: "",
+  edo: "",
+  assigned_official: "",
+};
+
+const defaultSalesProjects: SalesProjectRow[] = Array.from({ length: 12 }, (_, i) => ({
+  ...emptySalesProjectRow,
+  s_no: String(i + 1),
+}));
+
+const emptyInvoiceItem: SalesInvoiceItem = {
+  s_no: "",
+  item: "",
+  total_cost: "",
+};
+
+const defaultInvoiceItems: SalesInvoiceItem[] = Array.from({ length: 5 }, (_, i) => ({
+  ...emptyInvoiceItem,
   s_no: String(i + 1),
 }));
 
@@ -106,7 +135,80 @@ const empty: Partial<Report> = {
   self_eval_challenges: null,
   supervisor_remark: null,
   supervisor_sign_date: null,
+  is_sales_report: false,
   // Also keep old fields for backwards compat
+  summary: null,
+  completed_work: null,
+  challenges: null,
+  achievements: null,
+  next_steps: null,
+};
+
+const emptySales: Partial<Report> = {
+  title: "",
+  report_type: "weekly",
+  status: "submitted",
+  report_date: new Date().toISOString().slice(0, 10),
+  attached_file: null,
+  attached_file_name: null,
+  report_link: null,
+  report_link_label: null,
+  // CSR/Sales banner
+  report_banner_line1: "CSR WEEKLY",
+  report_banner_line2: "PERFORMANCE",
+  report_banner_line3: "REPORT FORM",
+  report_employee_name: null,
+  report_designation: null,
+  report_week_ending: new Date().toISOString().slice(0, 10),
+  report_supervisor: null,
+  // Normal report projects (empty, not used for sales)
+  report_projects: defaultProjects,
+  perf_projects_received: "",
+  perf_projects_delivered: "",
+  perf_projects_ongoing: "",
+  perf_pending_feedback: "",
+  perf_remark: null,
+  // Sales-specific projects
+  sales_projects: defaultSalesProjects,
+  // Sales performance summary
+  sales_perf_number_of_projects: "",
+  sales_perf_total_project_value: "",
+  sales_perf_variance_against_target: "",
+  sales_perf_net_indicator: "",
+  sales_perf_leads_generated: "",
+  sales_perf_proposals_sent: "",
+  sales_perf_total_pending_deals: "",
+  sales_perf_total_completed_projects: "",
+  // Self evaluation + supervisor (same as normal report)
+  self_eval_rating: null,
+  self_eval_strategies: null,
+  self_eval_improvement: null,
+  self_eval_upcoming: null,
+  self_eval_challenges: null,
+  supervisor_remark: null,
+  supervisor_sign_date: null,
+  // Mark as sales report
+  is_sales_report: true,
+  // Invoice defaults
+  invoice_company_address: "House 5, 5th Street, Elekahia Housing Estate, Port Harcourt.",
+  invoice_company_phone: "0802-126-0000",
+  invoice_company_fax: "0803-747-8593",
+  invoice_company_email: "info@ibrand",
+  invoice_company_website: "www.ibrand",
+  invoice_bill_to_name: "The Management",
+  invoice_bill_to_address: null,
+  invoice_bill_to_email: null,
+  invoice_bill_to_phone: null,
+  invoice_number: null,
+  invoice_date: new Date().toISOString().slice(0, 10),
+  invoice_items: defaultInvoiceItems,
+  invoice_total: "",
+  invoice_bank_account_name: "iBrand Africa Ltd",
+  invoice_bank_account_number: "5600779289",
+  invoice_bank_name: "Fidelity Bank PLC",
+  invoice_footer_note:
+    "All payments should be made to accounts bearing iBrand Africa. Any payment made to accounts with another name will not be acknowledged.",
+  // Backwards compat
   summary: null,
   completed_work: null,
   challenges: null,
@@ -533,6 +635,15 @@ function ReportsPage() {
             >
               <Plus className="size-4" /> New report
             </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDraft({ ...emptySales });
+                setOpen(true);
+              }}
+            >
+              <FileText className="size-4" /> Sales Report
+            </Button>
           </div>
         }
       />
@@ -791,7 +902,13 @@ function ReportsPage() {
                       size="sm"
                       variant="ghost"
                       className="gap-1.5 text-primary hover:text-primary hover:bg-primary/5"
-                      onClick={() => exportReport(r)}
+                      onClick={() => {
+                        if (r.is_sales_report) {
+                          exportSalesReport(r);
+                        } else {
+                          exportReport(r);
+                        }
+                      }}
                     >
                       <Download className="size-4" /> Export
                     </Button>
@@ -811,7 +928,11 @@ function ReportsPage() {
           <div className="sticky top-0 z-20 border-b bg-background px-6 py-3.5 flex items-start justify-between gap-3">
             <DialogHeader>
               <DialogTitle>
-                {draft.id ? "Edit Report" : "New Weekly Performance Report"}
+                {draft.id
+                  ? "Edit Report"
+                  : draft.is_sales_report
+                    ? "New CSR / Sales Weekly Performance Report"
+                    : "New Weekly Performance Report"}
               </DialogTitle>
               <p className="text-muted-foreground text-xs mt-1">
                 Fill in the iBrand Africa form below. Upload file and Reference link sections appear
@@ -864,17 +985,31 @@ function ReportsPage() {
               </div>
             </div>
 
-            <WeeklyPerformanceReport
-              readOnly={false}
-              data={draft}
-              onChange={(updates) => setDraft((prev) => ({ ...prev, ...updates }))}
-              uploadingFile={uploadingFile}
-              onFileSelect={handleReportFileChange}
-              onRemoveFile={() =>
-                setDraft((d) => ({ ...d, attached_file: null, attached_file_name: null }))
-              }
-              fileInputRef={fileInputRef}
-            />
+            {draft.is_sales_report ? (
+              <SalesPerformanceReport
+                readOnly={false}
+                data={draft}
+                onChange={(updates) => setDraft((prev) => ({ ...prev, ...updates }))}
+                uploadingFile={uploadingFile}
+                onFileSelect={handleReportFileChange}
+                onRemoveFile={() =>
+                  setDraft((d) => ({ ...d, attached_file: null, attached_file_name: null }))
+                }
+                fileInputRef={fileInputRef}
+              />
+            ) : (
+              <WeeklyPerformanceReport
+                readOnly={false}
+                data={draft}
+                onChange={(updates) => setDraft((prev) => ({ ...prev, ...updates }))}
+                uploadingFile={uploadingFile}
+                onFileSelect={handleReportFileChange}
+                onRemoveFile={() =>
+                  setDraft((d) => ({ ...d, attached_file: null, attached_file_name: null }))
+                }
+                fileInputRef={fileInputRef}
+              />
+            )}
           </div>
 
           <DialogFooter className="px-6 py-4 border-t flex-shrink-0">
@@ -920,7 +1055,13 @@ function ReportsPage() {
                     variant="outline"
                     size="sm"
                     className="gap-1.5 h-9"
-                    onClick={() => exportReport(viewReport)}
+                    onClick={() => {
+                      if (viewReport.is_sales_report) {
+                        exportSalesReport(viewReport);
+                      } else {
+                        exportReport(viewReport);
+                      }
+                    }}
                   >
                     <Download className="size-4" /> Export PDF
                   </Button>
@@ -950,7 +1091,11 @@ function ReportsPage() {
               </div>
 
               <div className="px-6 py-5">
-                <WeeklyPerformanceReport readOnly={true} data={viewReport} />
+                {viewReport.is_sales_report ? (
+                  <SalesPerformanceReport readOnly={true} data={viewReport} />
+                ) : (
+                  <WeeklyPerformanceReport readOnly={true} data={viewReport} />
+                )}
               </div>
             </>
           )}
