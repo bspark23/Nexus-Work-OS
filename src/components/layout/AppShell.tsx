@@ -34,6 +34,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useLiveData } from "@/hooks/useLiveData";
 import { useMyDepartment } from "@/hooks/useData";
+import useAppSettings from "@/hooks/useAppSettings";
+import useOriginalSuperAdmin from "@/hooks/useOriginalSuperAdmin";
 import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { GlobalSearch } from "./GlobalSearch";
@@ -46,25 +48,64 @@ const accountNav: NavItem[] = [
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
-function workspaceNav(opts: {
-  isAdmin: boolean;
-  isDeptAdmin: boolean;
-  isSales: boolean;
-}): NavItem[] {
+function workspaceNav(
+  opts: {
+    isAdmin: boolean;
+    isDeptAdmin: boolean;
+    isSales: boolean;
+    isOriginalSuper: boolean;
+  },
+  settings?: { showReports?: boolean; showFileWorkspace?: boolean },
+): NavItem[] {
   const items: NavItem[] = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/projects", label: opts.isAdmin || opts.isDeptAdmin ? "Projects" : "My Projects", icon: FolderKanban },
-    { to: "/tasks", label: opts.isAdmin || opts.isDeptAdmin ? "Tasks" : "My Tasks", icon: ListChecks },
-    { to: "/reports", label: opts.isAdmin || opts.isDeptAdmin ? "Reports" : "My Reports", icon: FileText },
+    {
+      to: "/projects",
+      label: opts.isAdmin || opts.isDeptAdmin ? "Projects" : "My Projects",
+      icon: FolderKanban,
+    },
+    {
+      to: "/tasks",
+      label: opts.isAdmin || opts.isDeptAdmin ? "Tasks" : "My Tasks",
+      icon: ListChecks,
+    },
   ];
+
   if (opts.isAdmin || opts.isDeptAdmin) {
     items.push({ to: "/overdue", label: "Overdue Tasks", icon: AlarmClock });
   }
+
+  // Customer Jobs remains available to Sales and Admins
   if (opts.isSales || opts.isAdmin || opts.isDeptAdmin) {
     items.push({ to: "/customer-jobs", label: "Customer Jobs", icon: Briefcase });
+    // CSR report route for Sales team — visible to Sales (and Super Admin via isAdmin)
+    items.push({ to: "/csr-report", label: "CSR Report", icon: FileText });
+  }
+
+  // THE FOLLOWING ITEMS ARE "COMMENTED OUT" (HIDDEN) BY DEFAULT FOR NON-SUPER ADMINS
+  // They can be re-enabled via the Global Visibility toggles in the Admin Panel.
+  
+  // File Workspace visibility
+  const showFileWorkspace = settings?.showFileWorkspace ?? false;
+  if (showFileWorkspace || opts.isOriginalSuper) {
     items.push({ to: "/file-workspace", label: "File Workspace", icon: FileSpreadsheet });
   }
-  items.push({ to: "/activity", label: opts.isAdmin || opts.isDeptAdmin ? "Activity" : "My Activity", icon: ActivityIcon });
+
+  // General Reports visibility
+  const showReports = settings?.showReports ?? false;
+  if (showReports || opts.isOriginalSuper) {
+    items.push({
+      to: "/reports",
+      label: opts.isAdmin || opts.isDeptAdmin ? "Reports" : "My Reports",
+      icon: FileText,
+    });
+  }
+
+  items.push({
+    to: "/activity",
+    label: opts.isAdmin || opts.isDeptAdmin ? "Activity" : "My Activity",
+    icon: ActivityIcon,
+  });
   return items;
 }
 
@@ -81,6 +122,11 @@ const superAdminNav: NavItem[] = [
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { isAdmin, isDeptAdmin } = useAuth();
   const { isSales } = useMyDepartment();
+  const appSettings = useAppSettings();
+  const isOriginalSuper = useOriginalSuperAdmin();
+
+  // Handle loading state to prevent flicker for restricted items
+  const settingsLoading = appSettings.loading;
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   const item = (to: string, label: string, Icon: typeof LayoutDashboard) => {
@@ -118,7 +164,9 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
       <p className="text-sidebar-foreground/40 px-3 pt-2 pb-2 text-[11px] font-semibold tracking-widest uppercase">
         Workspace
       </p>
-      {workspaceNav({ isAdmin, isDeptAdmin, isSales }).map((n) => item(n.to, n.label, n.icon))}
+      {workspaceNav({ isAdmin, isDeptAdmin, isSales, isOriginalSuper }, appSettings).map((n) =>
+        item(n.to, n.label, n.icon),
+      )}
 
       {management.length ? (
         <>
@@ -136,7 +184,6 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
     </nav>
   );
 }
-
 
 /** Thin progress bar shown at the top of the page during navigation or data fetching */
 function TopLoadingBar() {
@@ -284,4 +331,3 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-

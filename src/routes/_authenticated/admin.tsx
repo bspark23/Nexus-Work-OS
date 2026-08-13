@@ -1,18 +1,35 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-  Building2, FolderKanban, ShieldCheck, Users, Plus, Pencil,
-  Trash2, UserX, UserCheck, ChevronDown, Loader2, AlertTriangle,
+  Building2,
+  FolderKanban,
+  ShieldCheck,
+  Users,
+  Plus,
+  Pencil,
+  Trash2,
+  UserX,
+  UserCheck,
+  ChevronDown,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  doc, setDoc, updateDoc, deleteDoc, collection, addDoc,
-  getDocs, query, where, serverTimestamp, writeBatch,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
-import {
-  createUserWithEmailAndPassword,
-} from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/integrations/firebase/config";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
@@ -21,17 +38,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/useAuth";
 import { useDepartments, useProfiles, useProjects, useRoles } from "@/hooks/useData";
+import useAppSettings from "@/hooks/useAppSettings";
+import { Switch } from "@/components/ui/switch";
 import { createDepartment, updateDepartment, deleteDepartment } from "@/lib/api";
 import { broadcast } from "@/lib/notify";
 import { usernameToAuthEmail, ROLES } from "@/lib/constants";
@@ -49,13 +80,22 @@ export const Route = createFileRoute("/_authenticated/admin")({
 
 /* ─── types ─── */
 type UserForm = {
-  fullName: string; username: string; email: string;
-  password: string; departmentId: string; jobTitle: string;
+  fullName: string;
+  username: string;
+  email: string;
+  password: string;
+  departmentId: string;
+  jobTitle: string;
   role: "super_admin" | "admin" | "employee";
 };
 const emptyUserForm: UserForm = {
-  fullName: "", username: "", email: "", password: "",
-  departmentId: "", jobTitle: "", role: "employee",
+  fullName: "",
+  username: "",
+  email: "",
+  password: "",
+  departmentId: "",
+  jobTitle: "",
+  role: "employee",
 };
 
 type DeptForm = { name: string; description: string };
@@ -91,10 +131,14 @@ function AdminPage() {
     );
   }
 
+  const appSettings = useAppSettings();
+  const [updatingSettings, setUpdatingSettings] = useState(false);
+
   const roleMap = Object.fromEntries(roles.map((r) => [r.user_id, r.role]));
 
-  const superAdminsSorted = [...people.filter((u) => roleMap[u.id] === "super_admin")]
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const superAdminsSorted = [...people.filter((u) => roleMap[u.id] === "super_admin")].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+  );
   const originalSuperAdminId = superAdminsSorted[0]?.id;
 
   /* ─── user handlers ─── */
@@ -177,7 +221,10 @@ function AdminPage() {
 
         // Check username taken
         const existing = await getDocs(
-          query(collection(db, "profiles"), where("username", "==", userForm.username.trim().toLowerCase())),
+          query(
+            collection(db, "profiles"),
+            where("username", "==", userForm.username.trim().toLowerCase()),
+          ),
         );
         if (!existing.empty) {
           toast.error("Username is already taken");
@@ -185,7 +232,11 @@ function AdminPage() {
           return;
         }
 
-        const { user: newUser } = await createUserWithEmailAndPassword(auth, authEmail, userForm.password);
+        const { user: newUser } = await createUserWithEmailAndPassword(
+          auth,
+          authEmail,
+          userForm.password,
+        );
 
         await setDoc(doc(db, "profiles", newUser.uid), {
           id: newUser.uid,
@@ -213,7 +264,9 @@ function AdminPage() {
           actorId: user?.id ?? null,
           type: "info",
         });
-        toast.success(`User "${userForm.fullName}" created — login: ${userForm.username} / ${userForm.password}`);
+        toast.success(
+          `User "${userForm.fullName}" created — login: ${userForm.username} / ${userForm.password}`,
+        );
       }
 
       setUserDialogOpen(false);
@@ -291,10 +344,16 @@ function AdminPage() {
     setDeptBusy(true);
     try {
       if (editDept) {
-        await updateDepartment(editDept.id, { name: deptForm.name, description: deptForm.description || null });
+        await updateDepartment(editDept.id, {
+          name: deptForm.name,
+          description: deptForm.description || null,
+        });
         toast.success("Department updated");
       } else {
-        await createDepartment({ name: deptForm.name, ...(deptForm.description ? { description: deptForm.description } : {}) });
+        await createDepartment({
+          name: deptForm.name,
+          ...(deptForm.description ? { description: deptForm.description } : {}),
+        });
         await broadcast({
           title: "New department created",
           body: `The "${deptForm.name}" department has been created.`,
@@ -314,9 +373,10 @@ function AdminPage() {
 
   async function handleDeleteDept(d: Department) {
     const memberCount = people.filter((p) => p.department_id === d.id).length;
-    const confirmMsg = memberCount > 0
-      ? `Delete department "${d.name}"? ${memberCount} member${memberCount > 1 ? "s" : ""} will be moved to Unassigned so you can reassign them.`
-      : `Delete department "${d.name}"? This cannot be undone.`;
+    const confirmMsg =
+      memberCount > 0
+        ? `Delete department "${d.name}"? ${memberCount} member${memberCount > 1 ? "s" : ""} will be moved to Unassigned so you can reassign them.`
+        : `Delete department "${d.name}"? This cannot be undone.`;
     if (!confirm(confirmMsg)) return;
     try {
       // 1. Null out department_id on all members of this department
@@ -326,9 +386,7 @@ function AdminPage() {
         for (let i = 0; i < members.length; i += 400) {
           const chunk = members.slice(i, i + 400);
           const batch = writeBatch(db);
-          chunk.forEach((m) =>
-            batch.update(doc(db, "profiles", m.id), { department_id: null }),
-          );
+          chunk.forEach((m) => batch.update(doc(db, "profiles", m.id), { department_id: null }));
           await batch.commit();
         }
       }
@@ -360,15 +418,21 @@ function AdminPage() {
     try {
       // Collections to clear (keep profiles and user_roles to preserve accounts)
       const collections = [
-        "projects", "tasks", "reports", "activities",
-        "notifications", "attachments", "customer_jobs",
-        "customer_job_departments", "saved_files",
+        "projects",
+        "tasks",
+        "reports",
+        "activities",
+        "notifications",
+        "attachments",
+        "customer_jobs",
+        "customer_job_departments",
+        "saved_files",
       ];
 
       for (const col of collections) {
         const snap = await getDocs(collection(db, col));
         // Firestore batch max 500 writes
-        const chunks: typeof snap.docs[] = [];
+        const chunks: (typeof snap.docs)[] = [];
         for (let i = 0; i < snap.docs.length; i += 400) {
           chunks.push(snap.docs.slice(i, i + 400));
         }
@@ -393,7 +457,71 @@ function AdminPage() {
   /* ─── render ─── */
   return (
     <>
-      <PageHeader title="Admin Panel" subtitle="Manage users, departments and company-wide settings." />
+      <PageHeader
+        title="Admin Panel"
+        subtitle="Manage users, departments and company-wide settings."
+      />
+
+      {/* Global visibility toggles for Reports and File Workspace */}
+      <div className="rounded-xl border p-4 mb-4">
+        <h3 className="font-semibold">Global Visibility</h3>
+        <p className="text-sm text-muted-foreground">
+          Toggle visibility of Reports and File Workspace for non-Super Admins.
+        </p>
+        <div className="mt-3 flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={!!appSettings.showReports}
+              onCheckedChange={async (v) => {
+                try {
+                  setUpdatingSettings(true);
+                  await setDoc(
+                    doc(db, "app_settings", "nav"),
+                    { showReports: !!v },
+                    { merge: true },
+                  );
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not update setting");
+                } finally {
+                  setUpdatingSettings(false);
+                }
+              }}
+            />
+            <div>
+              <div className="font-medium">Show Reports</div>
+              <div className="text-sm text-muted-foreground">
+                When enabled, Reports navigation and pages are available to non-superadmins.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={!!appSettings.showFileWorkspace}
+              onCheckedChange={async (v) => {
+                try {
+                  setUpdatingSettings(true);
+                  await setDoc(
+                    doc(db, "app_settings", "nav"),
+                    { showFileWorkspace: !!v },
+                    { merge: true },
+                  );
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Could not update setting");
+                } finally {
+                  setUpdatingSettings(false);
+                }
+              }}
+            />
+            <div>
+              <div className="font-medium">Show File Workspace</div>
+              <div className="text-sm text-muted-foreground">
+                When enabled, File Workspace is available to Sales and Department Admins.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Clear All Data — only for the original (undeletable) super admin */}
       {user?.id === originalSuperAdminId && (
@@ -401,13 +529,17 @@ function AdminPage() {
           <div>
             <p className="font-semibold text-sm text-destructive">Reset App Data</p>
             <p className="text-muted-foreground text-xs">
-              Clear all projects, tasks, reports, activities and files to start fresh for production. User accounts are kept.
+              Clear all projects, tasks, reports, activities and files to start fresh for
+              production. User accounts are kept.
             </p>
           </div>
           <Button
             variant="destructive"
             size="sm"
-            onClick={() => { setClearConfirmText(""); setClearConfirmOpen(true); }}
+            onClick={() => {
+              setClearConfirmText("");
+              setClearConfirmOpen(true);
+            }}
           >
             <AlertTriangle className="size-4" /> Clear All Data
           </Button>
@@ -416,9 +548,24 @@ function AdminPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Employees" value={people.length} icon={<Users className="size-5" />} />
-        <StatCard label="Departments" value={departments.length} tone="info" icon={<Building2 className="size-5" />} />
-        <StatCard label="Projects" value={projects.length} tone="success" icon={<FolderKanban className="size-5" />} />
-        <StatCard label="Super Admins" value={roles.filter(r => r.role === "super_admin").length} tone="warning" icon={<ShieldCheck className="size-5" />} />
+        <StatCard
+          label="Departments"
+          value={departments.length}
+          tone="info"
+          icon={<Building2 className="size-5" />}
+        />
+        <StatCard
+          label="Projects"
+          value={projects.length}
+          tone="success"
+          icon={<FolderKanban className="size-5" />}
+        />
+        <StatCard
+          label="Super Admins"
+          value={roles.filter((r) => r.role === "super_admin").length}
+          tone="warning"
+          icon={<ShieldCheck className="size-5" />}
+        />
       </div>
 
       <Tabs defaultValue="users">
@@ -445,12 +592,21 @@ function AdminPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-sm">{p.full_name}</p>
                       <p className="text-muted-foreground text-xs">
-                        @{p.username} · {departments.find((d) => d.id === p.department_id)?.name ?? "No dept"}
+                        @{p.username} ·{" "}
+                        {departments.find((d) => d.id === p.department_id)?.name ?? "No dept"}
                       </p>
                     </div>
                     <StatusBadge
-                      label={role === "super_admin" ? "Super Admin" : role === "admin" ? "Dept Admin" : "Employee"}
-                      tone={role === "super_admin" ? "warning" : role === "admin" ? "info" : "neutral"}
+                      label={
+                        role === "super_admin"
+                          ? "Super Admin"
+                          : role === "admin"
+                            ? "Dept Admin"
+                            : "Employee"
+                      }
+                      tone={
+                        role === "super_admin" ? "warning" : role === "admin" ? "info" : "neutral"
+                      }
                     />
                     {suspended && <StatusBadge label="Suspended" tone="destructive" />}
                     {p.id === originalSuperAdminId && (
@@ -467,10 +623,15 @@ function AdminPage() {
                           <Pencil className="size-4" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleSuspend(p)}>
-                          {suspended
-                            ? <><UserCheck className="size-4" /> Activate</>
-                            : <><UserX className="size-4" /> Suspend</>
-                          }
+                          {suspended ? (
+                            <>
+                              <UserCheck className="size-4" /> Activate
+                            </>
+                          ) : (
+                            <>
+                              <UserX className="size-4" /> Suspend
+                            </>
+                          )}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -486,7 +647,9 @@ function AdminPage() {
                 );
               })}
               {people.length === 0 && (
-                <p className="text-muted-foreground px-5 py-10 text-center text-sm">No users yet.</p>
+                <p className="text-muted-foreground px-5 py-10 text-center text-sm">
+                  No users yet.
+                </p>
               )}
             </div>
           </div>
@@ -511,10 +674,20 @@ function AdminPage() {
                       {d.description ?? "No description"}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" className="h-7" onClick={() => openEditDept(d)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => openEditDept(d)}
+                  >
                     <Pencil className="size-3" /> Edit
                   </Button>
-                  <Button variant="ghost" size="icon" className="size-8" onClick={() => handleDeleteDept(d)}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => handleDeleteDept(d)}
+                  >
                     <Trash2 className="text-destructive size-4" />
                   </Button>
                 </div>
@@ -539,7 +712,11 @@ function AdminPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
                 <Label>Full name *</Label>
-                <Input value={userForm.fullName} onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })} placeholder="Jane Doe" />
+                <Input
+                  value={userForm.fullName}
+                  onChange={(e) => setUserForm({ ...userForm, fullName: e.target.value })}
+                  placeholder="Jane Doe"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Username *</Label>
@@ -552,34 +729,67 @@ function AdminPage() {
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} placeholder="jane@company.com" />
+                <Input
+                  type="email"
+                  value={userForm.email}
+                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                  placeholder="jane@company.com"
+                />
               </div>
               {!editUser && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label>Password *</Label>
-                  <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder="Min. 8 characters" minLength={8} />
+                  <Input
+                    type="password"
+                    value={userForm.password}
+                    onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                    placeholder="Min. 8 characters"
+                    minLength={8}
+                  />
                 </div>
               )}
               <div className="space-y-2">
                 <Label>Department</Label>
-                <Select value={userForm.departmentId} onValueChange={(v) => setUserForm({ ...userForm, departmentId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                <Select
+                  value={userForm.departmentId}
+                  onValueChange={(v) => setUserForm({ ...userForm, departmentId: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select…" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">No department</SelectItem>
-                    {departments.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                    {departments.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Job title</Label>
-                <Input value={userForm.jobTitle} onChange={(e) => setUserForm({ ...userForm, jobTitle: e.target.value })} placeholder="Developer…" />
+                <Input
+                  value={userForm.jobTitle}
+                  onChange={(e) => setUserForm({ ...userForm, jobTitle: e.target.value })}
+                  placeholder="Developer…"
+                />
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Role *</Label>
-                <Select value={userForm.role} onValueChange={(v) => setUserForm({ ...userForm, role: v as UserForm["role"] })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Select
+                  value={userForm.role}
+                  onValueChange={(v) => setUserForm({ ...userForm, role: v as UserForm["role"] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    {ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                    {ROLES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {userForm.role === "super_admin" && (
@@ -589,8 +799,13 @@ function AdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
-            <Button onClick={submitUser} disabled={userBusy || !userForm.fullName || !userForm.username}>
+            <Button variant="outline" onClick={() => setUserDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={submitUser}
+              disabled={userBusy || !userForm.fullName || !userForm.username}
+            >
               {userBusy ? <Loader2 className="size-4 animate-spin" /> : null}
               {editUser ? "Save changes" : "Create user"}
             </Button>
@@ -607,15 +822,25 @@ function AdminPage() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Name *</Label>
-              <Input value={deptForm.name} onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })} placeholder="Web Development" />
+              <Input
+                value={deptForm.name}
+                onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
+                placeholder="Web Development"
+              />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Input value={deptForm.description} onChange={(e) => setDeptForm({ ...deptForm, description: e.target.value })} placeholder="Optional description" />
+              <Input
+                value={deptForm.description}
+                onChange={(e) => setDeptForm({ ...deptForm, description: e.target.value })}
+                placeholder="Optional description"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeptDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeptDialogOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={submitDept} disabled={deptBusy || !deptForm.name}>
               {deptBusy ? <Loader2 className="size-4 animate-spin" /> : null}
               {editDept ? "Save changes" : "Create"}
@@ -633,11 +858,18 @@ function AdminPage() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm">
-              This will permanently delete all <strong>projects, tasks, reports, activities, notifications, file uploads,</strong> and <strong>customer jobs</strong>. User accounts are kept.
+              This will permanently delete all{" "}
+              <strong>projects, tasks, reports, activities, notifications, file uploads,</strong>{" "}
+              and <strong>customer jobs</strong>. User accounts are kept.
             </p>
-            <p className="text-sm font-medium">Data stored in Firebase is permanent — it will not disappear on its own once you start using the app for real.</p>
+            <p className="text-sm font-medium">
+              Data stored in Firebase is permanent — it will not disappear on its own once you start
+              using the app for real.
+            </p>
             <div className="space-y-2">
-              <Label>Type <span className="font-mono text-destructive">CLEAR ALL DATA</span> to confirm</Label>
+              <Label>
+                Type <span className="font-mono text-destructive">CLEAR ALL DATA</span> to confirm
+              </Label>
               <Input
                 value={clearConfirmText}
                 onChange={(e) => setClearConfirmText(e.target.value)}
@@ -647,13 +879,19 @@ function AdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setClearConfirmOpen(false)}>
+              Cancel
+            </Button>
             <Button
               variant="destructive"
               onClick={clearAllData}
               disabled={clearing || clearConfirmText !== "CLEAR ALL DATA"}
             >
-              {clearing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+              {clearing ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
               {clearing ? "Clearing…" : "Clear everything"}
             </Button>
           </DialogFooter>

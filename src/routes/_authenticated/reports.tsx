@@ -38,6 +38,8 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useScope } from "@/hooks/useScope";
 import { useReports, useProfiles, useDepartments } from "@/hooks/useData";
+import useAppSettings from "@/hooks/useAppSettings";
+import useOriginalSuperAdmin from "@/hooks/useOriginalSuperAdmin";
 import { saveReport, deleteReport, track } from "@/lib/api";
 import { broadcast } from "@/lib/notify";
 import { scopeReports } from "@/lib/scope";
@@ -218,12 +220,36 @@ const emptySales: Partial<Report> = {
 
 function ReportsPage() {
   const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
+  const appSettings = useAppSettings();
+  // Call data hooks unconditionally so hooks order stays stable across renders
+  const isOriginalSuper = useOriginalSuperAdmin();
   const scope = useScope();
   const qc = useQueryClient();
 
   const { data: allReports = [] } = useReports();
   const { data: allProfiles = [] } = useProfiles(canManage);
   const { data: departments = [] } = useDepartments();
+
+  if (appSettings.loading) {
+    return (
+      <div className="flex h-60 items-center justify-center">
+        <FileText className="text-muted-foreground size-6 animate-spin" />
+      </div>
+    );
+  }
+
+  // Restrict Reports page to the original Super Admin only unless enabled in Admin Panel
+  if (!isOriginalSuper && !appSettings.showReports) {
+    return (
+      <div className="text-muted-foreground flex h-60 flex-col items-center justify-center gap-2 text-sm">
+        <FileText className="size-8 opacity-30" />
+        <p>
+          This page is only available to the original Super Admin (enable in Admin Panel to allow
+          others).
+        </p>
+      </div>
+    );
+  }
 
   const reports = scopeReports(allReports, scope);
 
@@ -963,15 +989,6 @@ function ReportsPage() {
               }}
             >
               <Plus className="size-4" /> New report
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setDraft({ ...emptySales });
-                setOpen(true);
-              }}
-            >
-              <FileText className="size-4" /> Sales Report
             </Button>
           </div>
         }

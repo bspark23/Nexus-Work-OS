@@ -24,6 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/common/EmptyState";
 import { useAuth } from "@/hooks/useAuth";
 import { useMyDepartment, useSavedFile, useAllSavedFiles, useProfiles } from "@/hooks/useData";
+import useAppSettings from "@/hooks/useAppSettings";
+import useOriginalSuperAdmin from "@/hooks/useOriginalSuperAdmin";
 import {
   upsertSavedFile,
   updateSavedFileRows,
@@ -62,6 +64,7 @@ export const Route = createFileRoute("/_authenticated/file-workspace")({
 function FileWorkspacePage() {
   const { user, profile, isAdmin, isDeptAdmin } = useAuth();
   const { isSales } = useMyDepartment();
+  const appSettings = useAppSettings();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -94,7 +97,19 @@ function FileWorkspacePage() {
   }, [dirty]);
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const canAccess = isAdmin || isDeptAdmin || isSales;
+  // Access: Original Super Admin always. When enabled in admin settings, restore original audience (Sales + Dept Admins).
+  const isOriginalSuper = useOriginalSuperAdmin();
+  
+  if (appSettings.loading) {
+    return (
+      <div className="flex h-60 items-center justify-center">
+        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+      </div>
+    );
+  }
+
+  const canAccess =
+    isOriginalSuper || (appSettings.showFileWorkspace === true && (isSales || isDeptAdmin));
 
   // Split files into My Files and Team Files
   const myFiles = allFiles.filter((f) => f.owner_id === user?.id);
@@ -177,7 +192,9 @@ function FileWorkspacePage() {
     return (
       <div className="text-muted-foreground flex h-60 flex-col items-center justify-center gap-2 text-sm">
         <FileSpreadsheet className="size-8 opacity-30" />
-        <p>This page is only available to Sales department employees and admins.</p>
+        <p>
+          This page is only available to the Super Admin (turn on in Admin Panel to allow others).
+        </p>
       </div>
     );
   }

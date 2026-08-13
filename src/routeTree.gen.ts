@@ -16,6 +16,7 @@ import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
 import { Route as AuthenticatedCompanyReportsRouteImport } from './routes/_authenticated/company-reports'
+import { Route as AuthenticatedCsrReportRouteImport } from './routes/_authenticated/csr-report'
 import { Route as AuthenticatedCustomerJobsRouteImport } from './routes/_authenticated/customer-jobs'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedDepartmentsRouteImport } from './routes/_authenticated/departments'
@@ -65,6 +66,11 @@ const AuthenticatedCompanyReportsRoute =
     path: '/company-reports',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedCsrReportRoute = AuthenticatedCsrReportRouteImport.update({
+  id: '/csr-report',
+  path: '/csr-report',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedCustomerJobsRoute =
   AuthenticatedCustomerJobsRouteImport.update({
     id: '/customer-jobs',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/csr-report': typeof AuthenticatedCsrReportRoute
   '/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/analytics': typeof AuthenticatedAnalyticsRoute
   '/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/csr-report': typeof AuthenticatedCsrReportRoute
   '/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/departments': typeof AuthenticatedDepartmentsRoute
@@ -186,6 +194,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/analytics': typeof AuthenticatedAnalyticsRoute
   '/_authenticated/company-reports': typeof AuthenticatedCompanyReportsRoute
+  '/_authenticated/csr-report': typeof AuthenticatedCsrReportRoute
   '/_authenticated/customer-jobs': typeof AuthenticatedCustomerJobsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/departments': typeof AuthenticatedDepartmentsRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/company-reports'
+    | '/csr-report'
     | '/customer-jobs'
     | '/dashboard'
     | '/departments'
@@ -230,6 +240,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/analytics'
     | '/company-reports'
+    | '/csr-report'
     | '/customer-jobs'
     | '/dashboard'
     | '/departments'
@@ -252,6 +263,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/analytics'
     | '/_authenticated/company-reports'
+    | '/_authenticated/csr-report'
     | '/_authenticated/customer-jobs'
     | '/_authenticated/dashboard'
     | '/_authenticated/departments'
@@ -323,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/company-reports'
       fullPath: '/company-reports'
       preLoaderRoute: typeof AuthenticatedCompanyReportsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/csr-report': {
+      id: '/_authenticated/csr-report'
+      path: '/csr-report'
+      fullPath: '/csr-report'
+      preLoaderRoute: typeof AuthenticatedCsrReportRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/customer-jobs': {
@@ -424,6 +443,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedAnalyticsRoute: typeof AuthenticatedAnalyticsRoute
   AuthenticatedCompanyReportsRoute: typeof AuthenticatedCompanyReportsRoute
+  AuthenticatedCsrReportRoute: typeof AuthenticatedCsrReportRoute
   AuthenticatedCustomerJobsRoute: typeof AuthenticatedCustomerJobsRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDepartmentsRoute: typeof AuthenticatedDepartmentsRoute
@@ -443,6 +463,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedAnalyticsRoute: AuthenticatedAnalyticsRoute,
   AuthenticatedCompanyReportsRoute: AuthenticatedCompanyReportsRoute,
+  AuthenticatedCsrReportRoute: AuthenticatedCsrReportRoute,
   AuthenticatedCustomerJobsRoute: AuthenticatedCustomerJobsRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDepartmentsRoute: AuthenticatedDepartmentsRoute,
