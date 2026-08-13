@@ -64,24 +64,44 @@ export const Route = createFileRoute("/_authenticated/file-workspace")({
 function FileWorkspacePage() {
   const { user, profile, isAdmin, isDeptAdmin } = useAuth();
   const { isSales } = useMyDepartment();
-  const appSettings = useAppSettings();
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  // ── ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT TOP ──────────────────────
+  const appSettings = useAppSettings();
+  const isOriginalSuper = useOriginalSuperAdmin();
+
   // ── view state ────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState<"workspace" | "tracker">("tracker");
-
-  // ── data ──────────────────────────────────────────────────────────────────
-  // Only load files when in workspace mode to improve performance
-  const { data: allFiles = [], isLoading } = useAllSavedFiles(viewMode === "workspace");
-  // Only load profiles in tracker mode (workspace: only owner_name strings are shown, not full profiles)
-  const needProfiles = viewMode === "tracker";
-  const { data: allProfiles = [] } = useProfiles(needProfiles);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editRows, setEditRows] = useState<SavedFileRow[] | null>(null);
   const [dirty, setDirty] = useState(false);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+
+  // Task assignment dialog state
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignRow, setAssignRow] = useState<{ row: TrackerRow; sheetName: string } | null>(null);
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDesc, setTaskDesc] = useState("");
+  const [taskDeadline, setTaskDeadline] = useState("");
+  const [taskPriority, setTaskPriority] = useState("medium");
+  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+
+  // File workspace click-to-edit state
+  const [fwEditingCell, setFwEditingCell] = useState<{ row: number; col: string } | null>(null);
+  const fwEditInputRef = useRef<HTMLInputElement>(null);
+  const fwScrollRef = useRef<HTMLDivElement>(null);
+  const [fwScrollTop, setFwScrollTop] = useState(0);
+  const fwDidFocusRef = useRef<string | null>(null);
+
+  // ── data ──────────────────────────────────────────────────────────────────
+  // Only load files when in workspace mode to improve performance
+  const { data: allFiles = [], isLoading } = useAllSavedFiles(viewMode === "workspace");
+  // Only load profiles in tracker mode
+  const needProfiles = viewMode === "tracker";
+  const { data: allProfiles = [] } = useProfiles(needProfiles);
 
   // ── warn on unsaved changes ──────────────────────────────────────────────
   useEffect(() => {
@@ -97,17 +117,6 @@ function FileWorkspacePage() {
   }, [dirty]);
 
   // ── derived ───────────────────────────────────────────────────────────────
-  // Access: Original Super Admin always. When enabled in admin settings, restore original audience (Sales + Dept Admins).
-  const isOriginalSuper = useOriginalSuperAdmin();
-  
-  if (appSettings.loading) {
-    return (
-      <div className="flex h-60 items-center justify-center">
-        <Loader2 className="text-muted-foreground size-6 animate-spin" />
-      </div>
-    );
-  }
-
   const canAccess =
     isOriginalSuper || (appSettings.showFileWorkspace === true && (isSales || isDeptAdmin));
 
@@ -124,13 +133,9 @@ function FileWorkspacePage() {
   const isPdf = activeFileData?.file_type === "pdf";
   const isOwner = activeFileData?.owner_id === user?.id;
 
-  // ── File workspace performance: click-to-edit + virtualize ────────────────
-  const [fwEditingCell, setFwEditingCell] = useState<{ row: number; col: string } | null>(null);
-  const fwEditInputRef = useRef<HTMLInputElement>(null);
+  // ── File workspace performance: virtualization ────────────────────────────
   const FW_ROW_H = 36;
   const FW_VIRT_THRESHOLD = 150;
-  const fwScrollRef = useRef<HTMLDivElement>(null);
-  const [fwScrollTop, setFwScrollTop] = useState(0);
   const useFwVirtual = displayRows.length > FW_VIRT_THRESHOLD;
 
   const { fwStart, fwEnd } = useMemo(() => {
@@ -141,15 +146,13 @@ function FileWorkspacePage() {
     return { fwStart: start, fwEnd: end };
   }, [fwScrollTop, displayRows.length, useFwVirtual]);
 
-  // Track if we've already positioned cursor for current edit cell
-  const fwDidFocusRef = useRef<string | null>(null);
+  // Track cursor for current edit cell
   useEffect(() => {
     if (fwEditingCell && fwEditInputRef.current) {
       const cellKey = `${fwEditingCell.row}:${fwEditingCell.col}`;
       if (fwDidFocusRef.current !== cellKey) {
         fwDidFocusRef.current = cellKey;
         fwEditInputRef.current.focus();
-        // Put cursor at the END instead of selecting all text (prevents highlighting issues)
         const len = fwEditInputRef.current.value.length;
         fwEditInputRef.current.setSelectionRange(len, len);
       }
@@ -158,28 +161,15 @@ function FileWorkspacePage() {
     }
   }, [fwEditingCell]);
 
-  function fwStartEdit(row: number, col: string) {
-    if (!isOwner) return;
-    setFwEditingCell({ row, col });
-  }
-
-  function fwCommitEdit(col: string, value: string) {
-    if (!fwEditingCell) return;
-    editCell(fwEditingCell.row, col, value);
-    setFwEditingCell(null);
-  }
-
-  // Task assignment dialog state
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignRow, setAssignRow] = useState<{ row: TrackerRow; sheetName: string } | null>(null);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [taskDeadline, setTaskDeadline] = useState("");
-  const [taskPriority, setTaskPriority] = useState("medium");
-  const [taskAssigneeId, setTaskAssigneeId] = useState<string | null>(null);
-  const [assigning, setAssigning] = useState(false);
-
   // ── loading / access guards ───────────────────────────────────────────────
+  if (appSettings.loading) {
+    return (
+      <div className="flex h-60 items-center justify-center">
+        <Loader2 className="text-muted-foreground size-6 animate-spin" />
+      </div>
+    );
+  }
+
   if (isLoading && viewMode === "workspace") {
     return (
       <div className="flex h-60 items-center justify-center">
@@ -197,6 +187,18 @@ function FileWorkspacePage() {
         </p>
       </div>
     );
+  }
+
+  // ── helper functions ──────────────────────────────────────────────────────
+  function fwStartEdit(row: number, col: string) {
+    if (!isOwner) return;
+    setFwEditingCell({ row, col });
+  }
+
+  function fwCommitEdit(col: string, value: string) {
+    if (!fwEditingCell) return;
+    editCell(fwEditingCell.row, col, value);
+    setFwEditingCell(null);
   }
 
   // ── handlers ──────────────────────────────────────────────────────────────

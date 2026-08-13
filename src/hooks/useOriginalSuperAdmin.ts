@@ -7,12 +7,12 @@ import { useProfiles, useRoles } from "./useData";
  * The original Super Admin is the earliest-created profile with role `super_admin`.
  */
 export function useOriginalSuperAdmin() {
-  const { user } = useAuth();
-  const { data: people = [] } = useProfiles();
-  const { data: roles = [] } = useRoles();
+  const { user, isAdmin } = useAuth();
+  const { data: people = [] } = useProfiles(isAdmin); // Only fetch if user is admin
+  const { data: roles = [] } = useRoles(isAdmin);
 
   return useMemo(() => {
-    if (!user) return false;
+    if (!user || !isAdmin) return false;
     const roleMap = Object.fromEntries(roles.map((r: any) => [r.user_id, r.role]));
     const superAdmins = people.filter((p: any) => roleMap[p.id] === "super_admin");
     if (!superAdmins.length) return false;
@@ -20,7 +20,7 @@ export function useOriginalSuperAdmin() {
       (a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     );
     return sorted[0]?.id === user.id;
-  }, [user, people, roles]);
+  }, [user, isAdmin, people, roles]);
 }
 
 export default useOriginalSuperAdmin;

@@ -220,16 +220,34 @@ const emptySales: Partial<Report> = {
 
 function ReportsPage() {
   const { user, profile, isAdmin, isDeptAdmin, canManage } = useAuth();
+  const qc = useQueryClient();
+
+  // ALL HOOKS MUST BE CALLED UNCONDITIONALLY AT TOP
   const appSettings = useAppSettings();
-  // Call data hooks unconditionally so hooks order stays stable across renders
   const isOriginalSuper = useOriginalSuperAdmin();
   const scope = useScope();
-  const qc = useQueryClient();
 
   const { data: allReports = [] } = useReports();
   const { data: allProfiles = [] } = useProfiles(canManage);
   const { data: departments = [] } = useDepartments();
 
+  // Filters
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterDept, setFilterDept] = useState("all");
+  const [filterEmployee, setFilterEmployee] = useState("all");
+
+  // Dialogs
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<Partial<Report>>(empty);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [viewReport, setViewReport] = useState<Report | null>(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // NOW check loading and access AFTER all hooks
   if (appSettings.loading) {
     return (
       <div className="flex h-60 items-center justify-center">
@@ -252,23 +270,6 @@ function ReportsPage() {
   }
 
   const reports = scopeReports(allReports, scope);
-
-  // Filters
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [filterDept, setFilterDept] = useState("all");
-  const [filterEmployee, setFilterEmployee] = useState("all");
-
-  // Dialogs
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Partial<Report>>(empty);
-  const [uploadingFile, setUploadingFile] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  // Read-only view dialog (for admins reading other people's reports)
-  const [viewReport, setViewReport] = useState<Report | null>(null);
-  const [viewOpen, setViewOpen] = useState(false);
-  const [exporting, setExporting] = useState(false);
 
   async function handleReportFileChange(files: FileList | null) {
     const file = files?.[0];
