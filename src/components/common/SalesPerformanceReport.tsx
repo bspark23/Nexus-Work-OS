@@ -172,7 +172,8 @@ export function SalesPerformanceReport({
   const addSalesProject = () => {
     const rows = [...workingSalesProjects];
     rows.push({ ...EMPTY_SALES_PROJECT_ROW, s_no: String(rows.length + 1) });
-    saveSalesProjects(rows);
+    // Don't trim when adding - we want to keep the new empty row
+    set({ sales_projects: rows });
   };
 
   const removeSalesProject = (idx: number) => {
@@ -230,7 +231,8 @@ export function SalesPerformanceReport({
   const addInvoiceItem = () => {
     const rows = [...workingInvoiceItems];
     rows.push({ ...EMPTY_INVOICE_ITEM, s_no: String(rows.length + 1) });
-    saveInvoiceItems(rows);
+    // Don't trim when adding - we want to keep the new empty row
+    set({ invoice_items: rows });
   };
 
   const removeInvoiceItem = (idx: number) => {
@@ -1088,19 +1090,26 @@ export function SalesPerformanceReport({
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-y-4 border-[#e6a817]">
-                  <th className="py-2.5 px-4 text-left font-bold bg-[#fff8e8]">
-                    Item
-                    {!readOnly && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="ml-2 h-5 w-5 hover:bg-primary/10 hover:text-primary align-middle"
-                        onClick={addInvoiceItem}
-                      >
-                        <Plus className="size-3.5" />
-                      </Button>
-                    )}
+                  <th className="py-2.5 px-4 text-left font-bold bg-[#fff8e8] relative">
+                    <div className="flex items-center gap-2">
+                      <span>Item</span>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            console.log('Add invoice item clicked', workingInvoiceItems.length);
+                            addInvoiceItem();
+                          }}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded hover:bg-primary/20 hover:text-primary transition-colors cursor-pointer z-50"
+                          title="Add new invoice item"
+                          style={{ position: 'relative', zIndex: 50 }}
+                        >
+                          <Plus className="size-4" />
+                        </button>
+                      )}
+                    </div>
                   </th>
                   <th className="py-2.5 px-4 text-right font-bold bg-[#fff8e8] w-[180px]">Total Cost (₦)</th>
                   {!readOnly && <th className="w-[52px] py-2.5 bg-[#fff8e8]" />}

@@ -8,6 +8,9 @@ import {
   Trash2,
   Eye,
   Download,
+  Paperclip,
+  Link2,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -352,6 +355,41 @@ function CSRReportPage() {
                   </div>
                 </div>
 
+                {/* Show attached file and link */}
+                {(r.attached_file_name || r.report_link) && (
+                  <div className="space-y-2">
+                    {r.attached_file_name && (
+                      <div className="flex items-center gap-2 rounded-lg bg-secondary/30 px-3 py-2 text-xs">
+                        <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="flex-1 truncate font-medium">{r.attached_file_name}</span>
+                        {r.attached_file && (
+                          <a
+                            href={r.attached_file}
+                            download={r.attached_file_name}
+                            className="text-primary hover:underline"
+                          >
+                            <Download className="size-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {r.report_link && (
+                      <div className="flex items-center gap-2 rounded-lg bg-secondary/30 px-3 py-2 text-xs">
+                        <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
+                        <a
+                          href={r.report_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 truncate text-primary hover:underline"
+                        >
+                          {r.report_link_label || r.report_link}
+                        </a>
+                        <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Button
                     size="sm"
@@ -425,7 +463,39 @@ function CSRReportPage() {
                 <DialogHeader>
                   <DialogTitle>{viewReport.title}</DialogTitle>
                 </DialogHeader>
-                <Button variant="outline" onClick={() => setViewOpen(false)}>Close</Button>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const reportElement = document.getElementById('sales-performance-report');
+                      if (reportElement) {
+                        const printWindow = window.open('', '_blank');
+                        if (printWindow) {
+                          printWindow.document.write(`
+                            <html>
+                              <head>
+                                <title>${viewReport.title}</title>
+                                <style>
+                                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
+                                  @media print { body { margin: 0; padding: 0; } }
+                                </style>
+                              </head>
+                              <body>${reportElement.innerHTML}</body>
+                            </html>
+                          `);
+                          printWindow.document.close();
+                          setTimeout(() => {
+                            printWindow.print();
+                          }, 250);
+                        }
+                      }
+                    }}
+                  >
+                    <Download className="size-4 mr-1" /> Export PDF
+                  </Button>
+                  <Button variant="outline" onClick={() => setViewOpen(false)}>Close</Button>
+                </div>
               </div>
               <div className="px-6 py-5">
                 <SalesPerformanceReport readOnly={true} data={viewReport} />
