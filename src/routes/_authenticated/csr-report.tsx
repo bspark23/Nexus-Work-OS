@@ -467,28 +467,71 @@ function CSRReportPage() {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => {
-                      const reportElement = document.getElementById('sales-performance-report');
-                      if (reportElement) {
-                        const printWindow = window.open('', '_blank');
-                        if (printWindow) {
-                          printWindow.document.write(`
-                            <html>
-                              <head>
-                                <title>${viewReport.title}</title>
-                                <style>
-                                  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; }
-                                  @media print { body { margin: 0; padding: 0; } }
-                                </style>
-                              </head>
-                              <body>${reportElement.innerHTML}</body>
-                            </html>
-                          `);
-                          printWindow.document.close();
-                          setTimeout(() => {
-                            printWindow.print();
-                          }, 250);
-                        }
+                    onClick={async () => {
+                      try {
+                        // Use browser's print with better styling
+                        const reportElement = document.getElementById('sales-performance-report');
+                        if (!reportElement) return;
+                        
+                        // Create a hidden iframe for printing
+                        const iframe = document.createElement('iframe');
+                        iframe.style.position = 'absolute';
+                        iframe.style.width = '0';
+                        iframe.style.height = '0';
+                        iframe.style.border = 'none';
+                        document.body.appendChild(iframe);
+                        
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+                        if (!iframeDoc) return;
+                        
+                        // Get all stylesheets from the main document
+                        const styles = Array.from(document.styleSheets)
+                          .map((styleSheet) => {
+                            try {
+                              return Array.from(styleSheet.cssRules)
+                                .map((rule) => rule.cssText)
+                                .join('\n');
+                            } catch (e) {
+                              return '';
+                            }
+                          })
+                          .join('\n');
+                        
+                        iframeDoc.open();
+                        iframeDoc.write(`
+                          <!DOCTYPE html>
+                          <html>
+                            <head>
+                              <title>${viewReport.title}</title>
+                              <meta charset="utf-8">
+                              <style>
+                                ${styles}
+                                @media print {
+                                  body { margin: 0; padding: 0; }
+                                  @page { size: A4; margin: 10mm; }
+                                }
+                                body {
+                                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                                  margin: 0;
+                                  padding: 20px;
+                                }
+                              </style>
+                            </head>
+                            <body>
+                              ${reportElement.outerHTML}
+                            </body>
+                          </html>
+                        `);
+                        iframeDoc.close();
+                        
+                        // Wait for content to load
+                        setTimeout(() => {
+                          iframe.contentWindow?.print();
+                          setTimeout(() => document.body.removeChild(iframe), 1000);
+                        }, 500);
+                      } catch (error) {
+                        console.error('Export failed:', error);
+                        toast.error('Failed to export PDF');
                       }
                     }}
                   >

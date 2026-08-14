@@ -719,91 +719,93 @@ export function SalesPerformanceReport({
             PERFORMANCE SUMMARY
           </h3>
         </div>
-        <table className="w-full border-collapse text-xs">
-          <tbody>
-            <tr className="border-b border-gray-400">
-              <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Number of Projects</td>
-              <td className="w-[11%] border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_number_of_projects}
-                  onChange={(v) => set({ sales_perf_number_of_projects: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="w-[23%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Project Value (₦)</td>
-              <td className="w-[11%] border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_total_project_value}
-                  onChange={(v) => set({ sales_perf_total_project_value: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
-                Variance against Weekly Target (₦)
-              </td>
-              <td className="w-[11%] border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_variance_against_target}
-                  onChange={(v) => set({ sales_perf_variance_against_target: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="w-[22%] px-3 py-2 font-semibold bg-gray-100">Net Indicator</td>
-              <td className="text-center">
-                <Cell
-                  value={data.sales_perf_net_indicator}
-                  onChange={(v) => set({ sales_perf_net_indicator: v })}
-                  readOnly={readOnly}
-                  placeholder="Surplus/Deficit"
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-            </tr>
-            <tr>
-              <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Leads Generated</td>
-              <td className="border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_leads_generated}
-                  onChange={(v) => set({ sales_perf_leads_generated: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Proposals sent</td>
-              <td className="border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_proposals_sent}
-                  onChange={(v) => set({ sales_perf_proposals_sent: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Pending Deals</td>
-              <td className="border-r border-gray-400 text-center">
-                <Cell
-                  value={data.sales_perf_total_pending_deals}
-                  onChange={(v) => set({ sales_perf_total_pending_deals: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-              <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
-                Total Completed/Closed projects
-              </td>
-              <td className="text-center">
-                <Cell
-                  value={data.sales_perf_total_completed_projects}
-                  onChange={(v) => set({ sales_perf_total_completed_projects: v })}
-                  readOnly={readOnly}
-                  className="text-center justify-center font-medium text-info"
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-xs min-w-[900px]">
+            <tbody>
+              <tr className="border-b border-gray-400">
+                <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Number of Projects</td>
+                <td className="w-[11%] border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_number_of_projects}
+                    onChange={(v) => set({ sales_perf_number_of_projects: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="w-[23%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Project Value (₦)</td>
+                <td className="w-[11%] border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_total_project_value}
+                    onChange={(v) => set({ sales_perf_total_project_value: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
+                  Variance against Weekly Target (₦)
+                </td>
+                <td className="w-[11%] border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_variance_against_target}
+                    onChange={(v) => set({ sales_perf_variance_against_target: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="w-[22%] px-3 py-2 font-semibold bg-gray-100">Net Indicator</td>
+                <td className="text-center">
+                  <Cell
+                    value={data.sales_perf_net_indicator}
+                    onChange={(v) => set({ sales_perf_net_indicator: v })}
+                    readOnly={readOnly}
+                    placeholder="Surplus/Deficit"
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+              </tr>
+              <tr>
+                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Leads Generated</td>
+                <td className="border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_leads_generated}
+                    onChange={(v) => set({ sales_perf_leads_generated: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Proposals sent</td>
+                <td className="border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_proposals_sent}
+                    onChange={(v) => set({ sales_perf_proposals_sent: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Pending Deals</td>
+                <td className="border-r border-gray-400 text-center">
+                  <Cell
+                    value={data.sales_perf_total_pending_deals}
+                    onChange={(v) => set({ sales_perf_total_pending_deals: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
+                  Total Completed/Closed projects
+                </td>
+                <td className="text-center">
+                  <Cell
+                    value={data.sales_perf_total_completed_projects}
+                    onChange={(v) => set({ sales_perf_total_completed_projects: v })}
+                    readOnly={readOnly}
+                    className="text-center justify-center font-medium text-info"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* 6) SELF EVALUATION — same structure */}
