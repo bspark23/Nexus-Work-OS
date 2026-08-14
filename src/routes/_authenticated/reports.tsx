@@ -247,6 +247,26 @@ function ReportsPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Compute reports based on scope (must be before early returns)
+  const reports = scopeReports(allReports, scope);
+
+  // Filtered reports (useMemo must be called before any returns)
+  const filtered = useMemo(() => {
+    return reports.filter((r) => {
+      if (
+        search &&
+        !r.title.toLowerCase().includes(search.toLowerCase()) &&
+        !(r.summary ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+        return false;
+      if (filterType !== "all" && r.report_type !== filterType) return false;
+      if (filterStatus !== "all" && r.status !== filterStatus) return false;
+      if (filterDept !== "all" && r.department_id !== filterDept) return false;
+      if (filterEmployee !== "all" && r.author_id !== filterEmployee) return false;
+      return true;
+    });
+  }, [reports, search, filterType, filterStatus, filterDept, filterEmployee]);
+
   // NOW check loading and access AFTER all hooks
   if (appSettings.loading) {
     return (
@@ -269,8 +289,6 @@ function ReportsPage() {
     );
   }
 
-  const reports = scopeReports(allReports, scope);
-
   async function handleReportFileChange(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
@@ -292,22 +310,6 @@ function ReportsPage() {
     };
     reader.readAsDataURL(file);
   }
-
-  const filtered = useMemo(() => {
-    return reports.filter((r) => {
-      if (
-        search &&
-        !r.title.toLowerCase().includes(search.toLowerCase()) &&
-        !(r.summary ?? "").toLowerCase().includes(search.toLowerCase())
-      )
-        return false;
-      if (filterType !== "all" && r.report_type !== filterType) return false;
-      if (filterStatus !== "all" && r.status !== filterStatus) return false;
-      if (filterDept !== "all" && r.department_id !== filterDept) return false;
-      if (filterEmployee !== "all" && r.author_id !== filterEmployee) return false;
-      return true;
-    });
-  }, [reports, search, filterType, filterStatus, filterDept, filterEmployee]);
 
   // ── EXPORT ──────────────────────────────────────────────────────────────
   async function exportReport(report: Report, authorName?: string, deptName?: string) {
