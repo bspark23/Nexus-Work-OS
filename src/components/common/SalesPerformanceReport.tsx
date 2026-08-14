@@ -712,48 +712,111 @@ export function SalesPerformanceReport({
         </table>
       </div>
 
-      {/* 5) SALES PERFORMANCE SUMMARY - 8 fields */}
+      {/* 5) SALES PERFORMANCE SUMMARY - 8 fields with resizable columns */}
       <div className="border-x border-t-2 border-gray-400">
         <div className="border-b-2 border-gray-400">
           <h3 className="text-center font-bold py-2 text-base tracking-wider text-gray-800">
             PERFORMANCE SUMMARY
+            {!readOnly && (
+              <span className="ml-2 font-normal text-[10px] text-muted-foreground tracking-normal">
+                (Drag column edges to resize and see full content)
+              </span>
+            )}
           </h3>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-xs min-w-[900px]">
+          <table className="border-collapse text-xs table-fixed" style={{ minWidth: '1200px' }}>
+            <colgroup>
+              <col style={{ width: getColWidth("perf_label_1", "22%", 220) }} />
+              <col style={{ width: getColWidth("perf_value_1", "11%", 150) }} />
+              <col style={{ width: getColWidth("perf_label_2", "23%", 240) }} />
+              <col style={{ width: getColWidth("perf_value_2", "11%", 150) }} />
+              <col style={{ width: getColWidth("perf_label_3", "22%", 280) }} />
+              <col style={{ width: getColWidth("perf_value_3", "11%", 150) }} />
+              <col style={{ width: getColWidth("perf_label_4", "22%", 220) }} />
+              <col style={{ width: getColWidth("perf_value_4", "11%", 180) }} />
+            </colgroup>
             <tbody>
               <tr className="border-b border-gray-400">
-                <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Number of Projects</td>
-                <td className="w-[11%] border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Number of Projects
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_1", 220)}
+                    />
+                  )}
+                </td>
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_number_of_projects}
                     onChange={(v) => set({ sales_perf_number_of_projects: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_1", 150)}
+                    />
+                  )}
                 </td>
-                <td className="w-[23%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Project Value (₦)</td>
-                <td className="w-[11%] border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Total Project Value (₦)
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_2", 240)}
+                    />
+                  )}
+                </td>
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_total_project_value}
                     onChange={(v) => set({ sales_perf_total_project_value: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_2", 150)}
+                    />
+                  )}
                 </td>
-                <td className="w-[22%] border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
                   Variance against Weekly Target (₦)
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_3", 280)}
+                    />
+                  )}
                 </td>
-                <td className="w-[11%] border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_variance_against_target}
                     onChange={(v) => set({ sales_perf_variance_against_target: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_3", 150)}
+                    />
+                  )}
                 </td>
-                <td className="w-[22%] px-3 py-2 font-semibold bg-gray-100">Net Indicator</td>
-                <td className="text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Net Indicator
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_4", 220)}
+                    />
+                  )}
+                </td>
+                <td className="relative text-center">
                   <Cell
                     value={data.sales_perf_net_indicator}
                     onChange={(v) => set({ sales_perf_net_indicator: v })}
@@ -761,46 +824,106 @@ export function SalesPerformanceReport({
                     placeholder="Surplus/Deficit"
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_4", 180)}
+                    />
+                  )}
                 </td>
               </tr>
               <tr>
-                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Leads Generated</td>
-                <td className="border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Leads Generated
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_1", 220)}
+                    />
+                  )}
+                </td>
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_leads_generated}
                     onChange={(v) => set({ sales_perf_leads_generated: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_1", 150)}
+                    />
+                  )}
                 </td>
-                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Proposals sent</td>
-                <td className="border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Proposals sent
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_2", 240)}
+                    />
+                  )}
+                </td>
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_proposals_sent}
                     onChange={(v) => set({ sales_perf_proposals_sent: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_2", 150)}
+                    />
+                  )}
                 </td>
-                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">Total Pending Deals</td>
-                <td className="border-r border-gray-400 text-center">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
+                  Total Pending Deals
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_3", 280)}
+                    />
+                  )}
+                </td>
+                <td className="relative border-r border-gray-400 text-center">
                   <Cell
                     value={data.sales_perf_total_pending_deals}
                     onChange={(v) => set({ sales_perf_total_pending_deals: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_3", 150)}
+                    />
+                  )}
                 </td>
-                <td className="border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100">
+                <td className="relative border-r border-gray-400 px-3 py-2 font-semibold bg-gray-100 select-none">
                   Total Completed/Closed projects
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_label_4", 220)}
+                    />
+                  )}
                 </td>
-                <td className="text-center">
+                <td className="relative text-center">
                   <Cell
                     value={data.sales_perf_total_completed_projects}
                     onChange={(v) => set({ sales_perf_total_completed_projects: v })}
                     readOnly={readOnly}
                     className="text-center justify-center font-medium text-info"
                   />
+                  {!readOnly && (
+                    <div
+                      className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-primary/60 active:bg-primary transition-colors z-10"
+                      onMouseDown={(e) => handleColResizeStart(e, "perf_value_4", 180)}
+                    />
+                  )}
                 </td>
               </tr>
             </tbody>

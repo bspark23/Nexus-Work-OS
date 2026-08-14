@@ -1273,7 +1273,7 @@ function ReportsPage() {
           NEW / EDIT REPORT DIALOG — uses iBrand template (editable)
           ═══════════════════════════════════════════════════════════ */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-5xl p-0">
+        <DialogContent className="max-h-[98vh] overflow-y-auto sm:max-w-[98vw] lg:max-w-[1600px] p-0">
           <div className="sticky top-0 z-20 border-b bg-background px-6 py-3.5 flex items-start justify-between gap-3">
             <DialogHeader>
               <DialogTitle>
@@ -1391,7 +1391,7 @@ function ReportsPage() {
           READ-ONLY VIEW (admins / preview) — uses SAME template
           ═══════════════════════════════════════════════════════════ */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
-        <DialogContent className="max-h-[94vh] overflow-y-auto sm:max-w-5xl p-0">
+        <DialogContent className="max-h-[98vh] overflow-y-auto sm:max-w-[98vw] lg:max-w-[1600px] p-0">
           {viewReport && (
             <>
               <div className="sticky top-0 z-20 border-b bg-background px-6 py-3.5 flex flex-wrap items-start justify-between gap-3">
