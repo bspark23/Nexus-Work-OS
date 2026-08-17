@@ -177,11 +177,17 @@ function AdminPage() {
         // Update role if changed
         const currentRole = roleMap[editUser.id];
         if (userForm.role !== currentRole) {
+          // Guard: NO ONE can change the original Super Admin's role except the original admin themselves
+          if (editUser.id === originalSuperAdminId && user?.id !== originalSuperAdminId) {
+            toast.error("Only the original Super Admin can change their own role");
+            setUserBusy(false);
+            return;
+          }
           // Guard: can't remove last super admin
           if (currentRole === "super_admin" && userForm.role !== "super_admin") {
             const superCount = roles.filter((r) => r.role === "super_admin").length;
             if (superCount <= 1) {
-              toast.error("Cannot remove the last Super Admin");
+              toast.error("Cannot remove the last Super Admin — promote someone else first");
               setUserBusy(false);
               return;
             }
@@ -292,22 +298,31 @@ function AdminPage() {
   async function deleteUser(p: Profile) {
     if (!confirm(`Delete ${p.full_name}? This cannot be undone.`)) return;
     try {
-      // Guard: can't delete yourself
-      if (p.id === user?.id) {
+      const isOriginalSuperAdmin = p.id === originalSuperAdminId;
+      const superCount = roles.filter((r) => r.role === "super_admin").length;
+
+      // Guard: OTHERS cannot delete the original Super Admin (only she can delete herself)
+      if (isOriginalSuperAdmin && p.id !== user?.id) {
+        toast.error("Only the original Super Admin can delete their own account");
+        return;
+      }
+
+      // Guard: Original Super Admin can delete herself ONLY IF she first promoted another super admin
+      if (isOriginalSuperAdmin && p.id === user?.id) {
+        if (superCount < 2) {
+          toast.error("Promote another user to Super Admin before deleting your own account");
+          return;
+        }
+      }
+
+      // Guard: Other non-original admins still can't delete themselves (original behavior)
+      if (p.id === user?.id && !isOriginalSuperAdmin) {
         toast.error("You cannot delete your own account");
         return;
       }
-      // Guard: protect the original first Super Admin (earliest created_at)
-      if (roleMap[p.id] === "super_admin") {
-        const superAdmins = people.filter((u) => roleMap[u.id] === "super_admin");
-        const sorted = [...superAdmins].sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        );
-        if (sorted[0]?.id === p.id) {
-          toast.error("The original Super Admin account cannot be deleted");
-          return;
-        }
-        const superCount = roles.filter((r) => r.role === "super_admin").length;
+
+      // Guard: protect non-original last super admin
+      if (roleMap[p.id] === "super_admin" && !isOriginalSuperAdmin) {
         if (superCount <= 1) {
           toast.error("Cannot delete the last Super Admin");
           return;
@@ -637,7 +652,10 @@ function AdminPage() {
                         <DropdownMenuItem
                           className="text-destructive"
                           onClick={() => deleteUser(p)}
-                          disabled={p.id === user?.id || p.id === originalSuperAdminId}
+                          disabled={
+                            (p.id === user?.id && p.id !== originalSuperAdminId) ||
+                            (p.id === originalSuperAdminId && p.id !== user?.id)
+                          }
                         >
                           <Trash2 className="size-4" /> Delete
                         </DropdownMenuItem>
@@ -780,6 +798,11 @@ function AdminPage() {
                 <Select
                   value={userForm.role}
                   onValueChange={(v) => setUserForm({ ...userForm, role: v as UserForm["role"] })}
+                  disabled={
+                    !!editUser &&
+                    editUser.id === originalSuperAdminId &&
+                    user?.id !== originalSuperAdminId
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -792,9 +815,19 @@ function AdminPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                {userForm.role === "super_admin" && (
-                  <p className="text-warning text-xs">⚠ This grants full company access.</p>
-                )}
+                {!!editUser &&
+                  editUser.id === originalSuperAdminId &&
+                  user?.id !== originalSuperAdminId && (
+                    <p className="text-warning text-xs">
+                      🔒 The original Super Admin's role can only be changed by themselves.
+                    </p>
+                  )}
+                {userForm.role === "super_admin" &&
+                  !(
+                    !!editUser &&
+                    editUser.id === originalSuperAdminId &&
+                    user?.id !== originalSuperAdminId
+                  ) && <p className="text-warning text-xs">⚠ This grants full company access.</p>}
               </div>
             </div>
           </div>
