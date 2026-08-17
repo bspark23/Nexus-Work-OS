@@ -285,6 +285,10 @@ function AdminPage() {
   }
 
   async function toggleSuspend(p: Profile) {
+    if (p.id === originalSuperAdminId) {
+      toast.error("The original Super Admin account cannot be suspended");
+      return;
+    }
     const newStatus = p.status === "suspended" ? "active" : "suspended";
     try {
       await updateDoc(doc(db, "profiles", p.id), { status: newStatus });
@@ -637,7 +641,10 @@ function AdminPage() {
                         <DropdownMenuItem onClick={() => openEditUser(p)}>
                           <Pencil className="size-4" /> Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => toggleSuspend(p)}>
+                        <DropdownMenuItem
+                          onClick={() => toggleSuspend(p)}
+                          disabled={p.id === originalSuperAdminId}
+                        >
                           {suspended ? (
                             <>
                               <UserCheck className="size-4" /> Activate
