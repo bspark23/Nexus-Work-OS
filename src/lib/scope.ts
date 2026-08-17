@@ -21,7 +21,7 @@ export const scopeProjects = (rows: Project[], s: Scope) =>
   pick(rows, s, (r) => r.owner_id === s.userId, (r) => r.department_id);
 
 export const scopeTasks = (rows: Task[], s: Scope) =>
-  pick(rows, s, (r) => r.owner_id === s.userId, (r) => r.department_id);
+  pick(rows, s, (r) => r.owner_id === s.userId || r.assigned_to === s.userId, (r) => r.department_id);
 
 export const scopeReports = (rows: Report[], s: Scope) =>
   pick(rows, s, (r) => r.author_id === s.userId, (r) => r.department_id);
